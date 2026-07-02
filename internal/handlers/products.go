@@ -40,7 +40,7 @@ func GetProduct(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		var product models.Product
-		if err := db.Preload("Ingredients.Ingredient").Preload("Machines.Machine").First(&product, id).Error; err != nil {
+		if err := db.Preload("Ingredients.Ingredient").Preload("Machines.Machine").Preload("OperationalResources.OperationalResource").First(&product, id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Producto no encontrado"})
 			return
 		}
@@ -251,6 +251,37 @@ func ListProductMachines(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+func UpdateProductMachine(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		productID := c.Param("id")
+		machineID := c.Param("machine_id")
+		var input struct {
+			MinutesPerUnit float64 `json:"minutes_per_unit" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if err := db.Model(&models.ProductMachine{}).Where("product_id = ? AND machine_id = ?", productID, machineID).Update("minutes_per_unit", input.MinutesPerUnit).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "Tiempo actualizado"})
+	}
+}
+
+func RemoveProductMachine(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		productID := c.Param("id")
+		machineID := c.Param("machine_id")
+		if err := db.Where("product_id = ? AND machine_id = ?", productID, machineID).Delete(&models.ProductMachine{}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusNoContent, nil)
+	}
+}
+
 // ─── PRODUCT OPERATIONAL RESOURCES ───────────────────────────────────────────
 
 func AddProductOperationalResource(db *gorm.DB) gin.HandlerFunc {
@@ -293,6 +324,37 @@ func ListProductOperationalResources(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusOK, resources)
+	}
+}
+
+func UpdateProductOperationalResource(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		productID := c.Param("id")
+		opresID := c.Param("opres_id")
+		var input struct {
+			ConsumptionPerBatch float64 `json:"consumption_per_batch" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if err := db.Model(&models.ProductOperationalResource{}).Where("product_id = ? AND operational_resource_id = ?", productID, opresID).Update("consumption_per_batch", input.ConsumptionPerBatch).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "Consumo actualizado"})
+	}
+}
+
+func RemoveProductOperationalResource(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		productID := c.Param("id")
+		opresID := c.Param("opres_id")
+		if err := db.Where("product_id = ? AND operational_resource_id = ?", productID, opresID).Delete(&models.ProductOperationalResource{}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusNoContent, nil)
 	}
 }
 

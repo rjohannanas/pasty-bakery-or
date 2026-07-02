@@ -2,11 +2,33 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"lingo-backend/internal/models"
 )
+
+// GetDefaultStock devuelve el único Stock del sistema (lo crea si no existe).
+// El negocio maneja un solo inventario diario, no varios stocks paralelos.
+func GetDefaultStock(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var stock models.Stock
+		err := db.Preload("Ingredients.Ingredient").Order("id asc").First(&stock).Error
+		if err == gorm.ErrRecordNotFound {
+			stock = models.Stock{Name: "Stock Diario"}
+			if err := db.Create(&stock).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			db.Preload("Ingredients.Ingredient").First(&stock, stock.ID)
+		} else if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, stock)
+	}
+}
 
 func ListStocks(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -98,6 +120,68 @@ func UpdateStock(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, stock)
+	}
+}
+
+// UpsertStockIngredient crea o actualiza la cantidad disponible de un ingrediente
+// en el stock diario (upsert porque el front edita cantidades día a día, no
+// siempre existe la fila previa para ese ingrediente).
+func UpsertStockIngredient(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		stockID := c.Param("id")
+		ingredientID := c.Param("ingredient_id")
+		var input struct {
+			QuantityAvailable float64 `json:"quantity_available" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		var stock models.Stock
+		if err := db.First(&stock, stockID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Stock no encontrado"})
+			return
+		}
+		ingID, err := strconv.ParseUint(ingredientID, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "ingredient_id inválido"})
+			return
+		}
+
+		var si models.StockIngredient
+		err = db.Where("stock_id = ? AND ingredient_id = ?", stockID, ingredientID).First(&si).Error
+		if err == gorm.ErrRecordNotFound {
+			si = models.StockIngredient{StockID: stock.ID, IngredientID: uint(ingID), QuantityAvailable: input.QuantityAvailable}
+			if err := db.Create(&si).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		} else if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		} else {
+			si.QuantityAvailable = input.QuantityAvailable
+			if err := db.Save(&si).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		c.JSON(http.StatusOK, si)
+	}
+}
+
+// RemoveStockIngredient desvincula un ingrediente del stock (no borra el
+// Ingredient global, solo la fila de cantidad diaria).
+func RemoveStockIngredient(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		stockID := c.Param("id")
+		ingredientID := c.Param("ingredient_id")
+		if err := db.Where("stock_id = ? AND ingredient_id = ?", stockID, ingredientID).Delete(&models.StockIngredient{}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusNoContent, nil)
 	}
 }
 

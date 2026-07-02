@@ -21,6 +21,7 @@ import (
 	"lingo-backend/internal/db"
 	"lingo-backend/internal/handlers"
 	"lingo-backend/internal/logger"
+	"lingo-backend/internal/middleware"
 	"lingo-backend/internal/queue"
 	"lingo-backend/internal/worker"
 	"lingo-backend/internal/ws"
@@ -75,20 +76,35 @@ func main() {
 	r := gin.Default()
 
 	// Middleware de CORS: permite todo por ahora para facilitar Lovable/Túneles
-	r.Use(cors.Default())
+	corsConfig := cors.DefaultConfig()
+	corsConfig.AllowAllOrigins = true
+	corsConfig.AllowHeaders = append(corsConfig.AllowHeaders, "X-Api-Key")
+	r.Use(cors.New(corsConfig))
 
 	// Endpoints de salud
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "time": time.Now()})
 	})
 
-	// WebSocket endpoint
-	r.GET("/ws", handlers.WebSocketHandler(hub))
-
 	// Swagger UI
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
+	apiKey := os.Getenv("APP_API_KEY")
+	if apiKey == "" {
+		logger.L.Warn().Msg("⚠️  APP_API_KEY no está seteada: la API queda ABIERTA sin protección. Configurala en .env para producción.")
+	}
+
+	// WebSocket endpoint (auth vía query param, el navegador no manda headers custom en el handshake)
+	if apiKey != "" {
+		r.GET("/ws", middleware.APIKeyAuthWS(apiKey), handlers.WebSocketHandler(hub))
+	} else {
+		r.GET("/ws", handlers.WebSocketHandler(hub))
+	}
+
 	api := r.Group("/api")
+	if apiKey != "" {
+		api.Use(middleware.APIKeyAuth(apiKey))
+	}
 	{
 		// Productos
 		api.GET("/products", handlers.ListProducts(pg))
@@ -104,9 +120,13 @@ func main() {
 		
 		api.GET("/products/:id/machines", handlers.ListProductMachines(pg))
 		api.POST("/products/:id/machines", handlers.AddProductMachine(pg))
-		
+		api.PUT("/products/:id/machines/:machine_id", handlers.UpdateProductMachine(pg))
+		api.DELETE("/products/:id/machines/:machine_id", handlers.RemoveProductMachine(pg))
+
 		api.GET("/products/:id/operational-resources", handlers.ListProductOperationalResources(pg))
 		api.POST("/products/:id/operational-resources", handlers.AddProductOperationalResource(pg))
+		api.PUT("/products/:id/operational-resources/:opres_id", handlers.UpdateProductOperationalResource(pg))
+		api.DELETE("/products/:id/operational-resources/:opres_id", handlers.RemoveProductOperationalResource(pg))
 
 		// Ingredientes
 		api.GET("/ingredients", handlers.ListIngredients(pg))
@@ -123,17 +143,26 @@ func main() {
 		api.DELETE("/machines/:id", handlers.DeleteMachine(pg))
 
 		// Stocks
+		api.GET("/stocks/default", handlers.GetDefaultStock(pg))
 		api.GET("/stocks", handlers.ListStocks(pg))
 		api.GET("/stocks/:id", handlers.GetStock(pg))
 		api.POST("/stocks", handlers.CreateStock(pg))
 		api.PUT("/stocks/:id", handlers.UpdateStock(pg))
 		api.DELETE("/stocks/:id", handlers.DeleteStock(pg))
+		api.PUT("/stocks/:id/ingredients/:ingredient_id", handlers.UpsertStockIngredient(pg))
+		api.DELETE("/stocks/:id/ingredients/:ingredient_id", handlers.RemoveStockIngredient(pg))
 
 		// Recursos
+		api.GET("/resources/default", handlers.GetDefaultResource(pg))
 		api.GET("/resources", handlers.ListResources(pg))
 		api.GET("/resources/:id", handlers.GetResource(pg))
 		api.POST("/resources", handlers.CreateResource(pg))
 		api.DELETE("/resources/:id", handlers.DeleteResource(pg))
+		api.PUT("/resources/:id/machines/:machine_id", handlers.UpsertResourceMachine(pg))
+		api.DELETE("/resources/:id/machines/:machine_id", handlers.RemoveResourceMachine(pg))
+		api.POST("/resources/:id/operational-resources", handlers.AddResourceOperationalResource(pg))
+		api.PUT("/resources/:id/operational-resources/:opres_id", handlers.UpdateResourceOperationalResource(pg))
+		api.DELETE("/resources/:id/operational-resources/:opres_id", handlers.DeleteResourceOperationalResource(pg))
 
 		// Optimización
 		api.POST("/optimize", handlers.Optimize(pg, rdb))
