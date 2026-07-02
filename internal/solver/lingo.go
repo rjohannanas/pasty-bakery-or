@@ -2,6 +2,7 @@ package solver
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -41,6 +42,46 @@ func floatSliceToString(slice []float64) string {
 }
 
 // BuildModel genera el contenido del modelo LINGO (.lng) basado en la DB.
+// BuildSnapshot arma una foto congelada (JSON) de los datos de entrada que usa
+// BuildModel: parámetros, stock+ingredientes, resource+máquinas+op.resources y
+// productos con sus matrices. Se guarda en Optimization.InputSnapshot para poder
+// reproducir/comparar una corrida aunque después se editen los singleton
+// Stock/Resource (que se mutan in-place). Recarga con los mismos Preload que
+// BuildModel para reflejar exactamente lo que se optimizó.
+func BuildSnapshot(db *gorm.DB, opt *models.Optimization) (json.RawMessage, error) {
+	var stock models.Stock
+	if err := db.Preload("Ingredients.Ingredient").First(&stock, opt.StockID).Error; err != nil {
+		return nil, fmt.Errorf("snapshot: error cargando stock: %w", err)
+	}
+
+	var resource models.Resource
+	if err := db.Preload("Machines.Machine").Preload("OperationalResources").First(&resource, opt.ResourceID).Error; err != nil {
+		return nil, fmt.Errorf("snapshot: error cargando recursos: %w", err)
+	}
+
+	var products []models.Product
+	if err := db.Preload("Ingredients.Ingredient").Preload("Machines.Machine").Preload("OperationalResources.OperationalResource").Order("id").Find(&products).Error; err != nil {
+		return nil, fmt.Errorf("snapshot: error cargando productos: %w", err)
+	}
+
+	snap := map[string]interface{}{
+		"captured_at": time.Now(),
+		"params": map[string]interface{}{
+			"max_production": opt.MaxProduction,
+			"min_variety":    opt.MinVariety,
+		},
+		"stock":    stock,
+		"resource": resource,
+		"products": products,
+	}
+
+	raw, err := json.Marshal(snap)
+	if err != nil {
+		return nil, fmt.Errorf("snapshot: error serializando: %w", err)
+	}
+	return raw, nil
+}
+
 func BuildModel(db *gorm.DB, opt *models.Optimization) (string, []models.Product, error) {
 	var stock models.Stock
 	if err := db.Preload("Ingredients.Ingredient").First(&stock, opt.StockID).Error; err != nil {

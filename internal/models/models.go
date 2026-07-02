@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // ─── Business ───────────────────────────────────────────────────────────────
 
@@ -150,6 +153,10 @@ type Optimization struct {
 	MaxProduction float64              `gorm:"not null;default:200" json:"max_production"` // M
 	MinVariety    int                  `gorm:"not null;default:7" json:"min_variety"`       // PRO
 	TotalProfit   float64              `json:"total_profit"`
+	// InputSnapshot: foto congelada (JSON) de stock/resource/products usados al
+	// resolver. Permite reproducir y comparar escenarios aunque después se editen
+	// los singleton Stock/Resource. Null en corridas viejas previas a esta feature.
+	InputSnapshot json.RawMessage      `gorm:"type:jsonb" json:"input_snapshot,omitempty"`
 	Stock         Stock                `gorm:"foreignKey:StockID;constraint:OnDelete:RESTRICT" json:"stock,omitempty"`
 	Resource      Resource             `gorm:"foreignKey:ResourceID;constraint:OnDelete:RESTRICT" json:"resource,omitempty"`
 	Results       []OptimizationResult `gorm:"foreignKey:OptimizationID" json:"results,omitempty"`

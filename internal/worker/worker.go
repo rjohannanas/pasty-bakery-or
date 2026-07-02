@@ -84,6 +84,13 @@ func processJob(ctx context.Context, db *gorm.DB, q *queue.Client, hub *ws.Hub, 
 		return
 	}
 
+	// Snapshot de la config de entrada (best-effort: si falla, no aborta el job).
+	if snap, snapErr := solver.BuildSnapshot(db, &opt); snapErr != nil {
+		logger.L.Warn().Err(snapErr).Str("job_id", jobID).Msg("[WORKER] No se pudo guardar el snapshot de entrada")
+	} else if err := db.Model(&models.Optimization{}).Where("job_id = ?", jobID).Update("input_snapshot", snap).Error; err != nil {
+		logger.L.Warn().Err(err).Str("job_id", jobID).Msg("[WORKER] No se pudo persistir el snapshot de entrada")
+	}
+
 	// 3. Ejecutar LINGO
 	startTime := time.Now()
 	output, err := solver.RunLINGO(ctx, jobID, modelStr)
