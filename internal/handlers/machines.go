@@ -1,0 +1,103 @@
+package handlers
+
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+	"lingo-backend/internal/models"
+)
+
+// ListMachines lista todas las máquinas.
+func ListMachines(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var machines []models.Machine
+		if err := db.Find(&machines).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, machines)
+	}
+}
+
+// GetMachine obtiene una máquina por ID.
+func GetMachine(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+		var machine models.Machine
+		if err := db.First(&machine, id).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Máquina no encontrada"})
+			return
+		}
+		c.JSON(http.StatusOK, machine)
+	}
+}
+
+// CreateMachine crea una nueva máquina.
+func CreateMachine(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var input struct {
+			Name string `json:"name" binding:"required"`
+		}
+
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		machine := models.Machine{
+			Name: input.Name,
+		}
+
+		if err := db.Create(&machine).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusCreated, machine)
+	}
+}
+
+// UpdateMachine actualiza una máquina existente.
+func UpdateMachine(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+		var machine models.Machine
+		if err := db.First(&machine, id).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Máquina no encontrada"})
+			return
+		}
+
+		var input struct {
+			Name string `json:"name"`
+		}
+
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		if input.Name != "" {
+			machine.Name = input.Name
+		}
+
+		if err := db.Save(&machine).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, machine)
+	}
+}
+
+// DeleteMachine elimina una máquina.
+func DeleteMachine(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+		if err := db.Delete(&models.Machine{}, id).Error; err != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "No se puede eliminar la máquina porque está siendo usada en productos o recursos"})
+			return
+		}
+		c.JSON(http.StatusNoContent, nil)
+	}
+}

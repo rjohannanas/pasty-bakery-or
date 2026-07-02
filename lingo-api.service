@@ -1,0 +1,15 @@
+[Unit]
+Description=LINGO Bakery API Service
+After=network.target postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=dulcinea
+WorkingDirectory=/home/dulcinea/lingo-backend
+ExecStart=/home/dulcinea/lingo-backend/lingo-api
+EnvironmentFile=/home/dulcinea/lingo-backend/.env
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

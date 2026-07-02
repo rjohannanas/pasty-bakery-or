@@ -1,0 +1,39 @@
+# Binaries
+lingo-api
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go installer tarball
+go*.tar.gz
+
+# Environment variables / secrets
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDEs/Editors
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Logs
+logs/
+*.log
+
+# Temporary LINGO files
+/tmp/lingo_*.lng
+/tmp/script_*.lingo
+modelo_auto.lingo
