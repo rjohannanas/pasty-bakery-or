@@ -80,8 +80,8 @@ func Optimize(db *gorm.DB, q *queue.Client) gin.HandlerFunc {
 
 		// 3. Encolar en Redis
 		if err := q.PushJob(c.Request.Context(), jobID); err != nil {
-			// No revertimos en postgres, el worker lo considerará como "no procesado" 
-			// pero el status en redis es la fuente de verdad del flujo.
+			// Si no se pudo encolar, no dejamos la fila huérfana en pending.
+			db.Delete(&opt)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al encolar trabajo en Redis"})
 			return
 		}
@@ -147,7 +147,12 @@ func GetOptimizationResult(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		var opt models.Optimization
-		if err := db.Preload("Results.Product").Preload("Stock").Preload("Resource").First(&opt, id).Error; err != nil {
+		if err := db.
+			Preload("Results.Product.Machines.Machine").
+			Preload("Stock.Ingredients.Ingredient").
+			Preload("Resource.Machines.Machine").
+			Preload("Resource.OperationalResources").
+			First(&opt, id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Optimización no encontrada"})
 			return
 		}

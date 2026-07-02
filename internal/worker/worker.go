@@ -2,11 +2,12 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"gorm.io/gorm"
-	
+
 	"lingo-backend/internal/logger"
 	"lingo-backend/internal/models"
 	"lingo-backend/internal/queue"
@@ -201,8 +202,12 @@ func handleJobError(ctx context.Context, db *gorm.DB, q *queue.Client, hub *ws.H
 }
 
 func broadcastStatus(hub *ws.Hub, jobID, status string) {
-	msg := fmt.Sprintf(`{"job_id": "%s", "status": "%s"}`, jobID, status)
-	hub.Broadcast([]byte(msg))
+	msg, err := json.Marshal(map[string]string{"job_id": jobID, "status": status})
+	if err != nil {
+		logger.L.Error().Err(err).Msg("[WORKER] Error serializando mensaje de broadcast")
+		return
+	}
+	hub.Broadcast(msg)
 }
 
 // recoverOrphanJobs busca jobs que hayan quedado en 'processing' cuando el servidor 

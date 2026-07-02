@@ -2,7 +2,14 @@ package ws
 
 import (
 	"sync"
+	"time"
+
 	"github.com/gorilla/websocket"
+)
+
+const (
+	pongWait   = 60 * time.Second
+	pingPeriod = (pongWait * 9) / 10
 )
 
 // Client representa una conexión WebSocket activa.
@@ -73,17 +80,52 @@ func (h *Hub) RegisterClient(conn *websocket.Conn) {
 	client := &Client{conn: conn, send: make(chan []byte, 256)}
 	h.register <- client
 
-	// Goroutine para escribir mensajes al cliente
-	go func() {
-		defer func() {
-			h.unregister <- client
-			conn.Close()
-		}()
-		for message := range client.send {
-			err := conn.WriteMessage(websocket.TextMessage, message)
-			if err != nil {
-				break
+	go client.writePump(h)
+	go client.readPump(h)
+}
+
+// writePump escribe mensajes salientes y manda pings periódicos para
+// detectar conexiones muertas (el navegador responde el pong solo).
+func (c *Client) writePump(h *Hub) {
+	ticker := time.NewTicker(pingPeriod)
+	defer func() {
+		ticker.Stop()
+		h.unregister <- c
+		c.conn.Close()
+	}()
+	for {
+		select {
+		case message, ok := <-c.send:
+			if !ok {
+				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
+				return
+			}
+		case <-ticker.C:
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
 			}
 		}
+	}
+}
+
+// readPump solo existe para detectar cierre/timeout del cliente; el front
+// no manda comandos que el backend necesite interpretar.
+func (c *Client) readPump(h *Hub) {
+	defer func() {
+		h.unregister <- c
+		c.conn.Close()
 	}()
+	c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	c.conn.SetPongHandler(func(string) error {
+		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+	for {
+		if _, _, err := c.conn.ReadMessage(); err != nil {
+			return
+		}
+	}
 }
