@@ -21,8 +21,12 @@ manda y el código se corrige.
 | Schema | Vive en | Naturaleza |
 |---|---|---|
 | **Lógico / conceptual** | este `docs/` (diccionario + ERD) | diseño humano, autoritativo |
-| **Físico** | `internal/models/`, migraciones | ejecutable, derivado del lógico |
-| **Contrato de API** | `docs/swagger.*` (generado) | compartido front↔back |
+| **Contrato de API** | `docs/openapi.yaml` (**contract-first**) | autoritativo; back y front **derivan** de él |
+| **Físico** | `internal/models/`, migraciones | ejecutable, derivado del lógico + contrato |
+
+> `docs/swagger.*` es la salida **vieja** generada del código singleton anterior
+> (code-first). Queda obsoleta: la reemplaza `openapi.yaml` como fuente. Se
+> elimina al recodear.
 
 ## Índice
 
@@ -33,9 +37,10 @@ manda y el código se corrige.
 | 02 | [data-dictionary.md](02-data-dictionary.md) | Entidades, atributos (dominio/invariantes), relaciones (ciclo de vida) |
 | 03 | [invariants.md](03-invariants.md) | Reglas de negocio transversales (multi-entidad) |
 | 04 | [optimization-process.md](04-optimization-process.md) | Ciclo del job: submit → cola → solver → resultados |
+| — | [openapi.yaml](openapi.yaml) | **Contrato de API autoritativo** (OpenAPI 3.1, contract-first) |
 | — | [erd.html](erd.html) | Diagrama visual del esquema (3 capas + ciclo de vida) |
 | — | [adr/](adr/) | Registros de decisión de arquitectura (por qué de cada elección) |
-| — | `swagger.yaml` | Contrato de API (generado del código) |
+| — | ~~`swagger.*`~~ | Salida vieja generada (obsoleta, se elimina al recodear) |
 
 ## Estado
 

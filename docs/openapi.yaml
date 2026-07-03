@@ -1,0 +1,476 @@
+openapi: 3.1.0
+info:
+  title: lingo-backend API
+  version: 1.0.0-scenarios
+  description: >
+    Contrato AUTORITATIVO (contract-first). El código de back y los tipos del
+    front derivan de este archivo, no al revés. Modelo: escenarios instanciados
+    + fork. Ver docs/02-data-dictionary.md y docs/03-invariants.md.
+
+    Los dominios e invariantes viven en los `schema` (minimum, enum, required,
+    minLength) — la validación se deriva de acá.
+
+    Nota: el WebSocket (/ws) no se describe en OpenAPI. Handshake:
+    `wss://host/ws?api_key=<KEY>`; mensajes `{ "job_id": string, "status": string }`.
+
+servers:
+  - url: https://pastyback.jblasc.com/api
+    description: Producción (Cloudflare Tunnel)
+  - url: http://localhost:8080/api
+    description: Local
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Scenarios
+  - name: Products
+  - name: Ingredients
+  - name: Machines
+  - name: OperationalResources
+  - name: Recipes
+  - name: Optimization
+
+paths:
+  /health:
+    get:
+      tags: [Optimization]
+      summary: Health check
+      security: []
+      responses:
+        "200": { description: OK }
+
+  # ─── Scenarios ──────────────────────────────────────────────────────────────
+  /scenarios:
+    get:
+      tags: [Scenarios]
+      summary: Lista escenarios (por defecto excluye archivados)
+      parameters:
+        - name: include_archived
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Lista
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Scenario" } }
+    post:
+      tags: [Scenarios]
+      summary: Crea un escenario draft vacío
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ScenarioCreate" }
+      responses:
+        "201": { $ref: "#/components/responses/ScenarioOne" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /scenarios/{scenario_id}:
+    parameters: [ { $ref: "#/components/parameters/ScenarioId" } ]
+    get:
+      tags: [Scenarios]
+      summary: Obtiene un escenario con todo su dominio
+      responses:
+        "200": { $ref: "#/components/responses/ScenarioDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Scenarios]
+      summary: Edita un escenario (solo si status=draft)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ScenarioUpdate" }
+      responses:
+        "200": { $ref: "#/components/responses/ScenarioOne" }
+        "409":
+          description: Escenario congelado — forkealo para editar
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    delete:
+      tags: [Scenarios]
+      summary: Borra un draft sin corridas, o archiva un escenario con historia
+      responses:
+        "204": { description: Borrado/archivado }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /scenarios/{scenario_id}/clone:
+    parameters: [ { $ref: "#/components/parameters/ScenarioId" } ]
+    post:
+      tags: [Scenarios]
+      summary: Clona/forkea un escenario a un nuevo draft (parent_id = origen)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 1 }
+      responses:
+        "201": { $ref: "#/components/responses/ScenarioOne" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /scenarios/{scenario_id}/optimize:
+    parameters: [ { $ref: "#/components/parameters/ScenarioId" } ]
+    post:
+      tags: [Optimization]
+      summary: Congela el escenario y encola una optimización
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                max_production: { type: number, minimum: 0 }
+                min_variety: { type: integer, minimum: 0 }
+      responses:
+        "202":
+          description: Job encolado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [job_id, status]
+                properties:
+                  job_id: { type: string }
+                  status: { $ref: "#/components/schemas/OptimizationStatus" }
+        "422":
+          description: Escenario sin productos con receta
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+
+  # ─── Products (patrón compartido por las 4 entidades de dominio) ─────────────
+  /scenarios/{scenario_id}/products:
+    parameters: [ { $ref: "#/components/parameters/ScenarioId" } ]
+    get:
+      tags: [Products]
+      summary: Lista productos del escenario
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Product" } }
+    post:
+      tags: [Products]
+      summary: Crea un producto en el escenario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductInput" }
+      responses:
+        "201": { description: Creado, content: { application/json: { schema: { $ref: "#/components/schemas/Product" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /scenarios/{scenario_id}/products/{product_id}:
+    parameters:
+      - { $ref: "#/components/parameters/ScenarioId" }
+      - { $ref: "#/components/parameters/ProductId" }
+    patch:
+      tags: [Products]
+      summary: Edita un producto (solo en draft)
+      requestBody:
+        content: { application/json: { schema: { $ref: "#/components/schemas/ProductInput" } } }
+      responses:
+        "200": { description: Actualizado, content: { application/json: { schema: { $ref: "#/components/schemas/Product" } } } }
+    delete:
+      tags: [Products]
+      summary: Borra un producto (cascadea su receta; nunca bloquea)
+      responses:
+        "204": { description: Borrado }
+
+  /scenarios/{scenario_id}/products/{product_id}/ingredients/{ingredient_id}:
+    parameters:
+      - { $ref: "#/components/parameters/ScenarioId" }
+      - { $ref: "#/components/parameters/ProductId" }
+      - { $ref: "#/components/parameters/IngredientId" }
+    put:
+      tags: [Recipes]
+      summary: Upsert celda de receta Q(I,J)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity: { type: number, minimum: 0, description: "Q — 0 es válido" }
+      responses:
+        "200": { description: OK }
+    delete:
+      tags: [Recipes]
+      summary: Quita la celda de receta
+      responses:
+        "204": { description: Borrado }
+
+  # Ingredients / Machines / OperationalResources siguen el MISMO patrón que
+  # Products: GET/POST en /scenarios/{id}/<recurso>, GET/PATCH/DELETE en
+  # /scenarios/{id}/<recurso>/{sub_id}. Recetas T y CM análogas a Q.
+  /scenarios/{scenario_id}/ingredients:
+    parameters: [ { $ref: "#/components/parameters/ScenarioId" } ]
+    get:
+      tags: [Ingredients]
+      summary: Lista insumos del escenario
+      responses:
+        "200": { content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Ingredient" } } } } }
+    post:
+      tags: [Ingredients]
+      summary: Crea un insumo
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/IngredientInput" } } } }
+      responses:
+        "201": { content: { application/json: { schema: { $ref: "#/components/schemas/Ingredient" } } }, description: Creado }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /scenarios/{scenario_id}/machines:
+    parameters: [ { $ref: "#/components/parameters/ScenarioId" } ]
+    get:
+      tags: [Machines]
+      summary: Lista máquinas del escenario
+      responses:
+        "200": { content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Machine" } } } } }
+    post:
+      tags: [Machines]
+      summary: Crea una máquina
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/MachineInput" } } } }
+      responses:
+        "201": { content: { application/json: { schema: { $ref: "#/components/schemas/Machine" } } }, description: Creado }
+
+  /scenarios/{scenario_id}/operational-resources:
+    parameters: [ { $ref: "#/components/parameters/ScenarioId" } ]
+    get:
+      tags: [OperationalResources]
+      summary: Lista recursos operativos del escenario
+      responses:
+        "200": { content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/OperationalResource" } } } } }
+    post:
+      tags: [OperationalResources]
+      summary: Crea un recurso operativo
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/OperationalResourceInput" } } } }
+      responses:
+        "201": { content: { application/json: { schema: { $ref: "#/components/schemas/OperationalResource" } } }, description: Creado }
+
+  # ─── Corridas ───────────────────────────────────────────────────────────────
+  /optimizations/{job_id}:
+    parameters:
+      - { name: job_id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Optimization]
+      summary: Estado de un job
+      responses:
+        "200": { description: Estado, content: { application/json: { schema: { $ref: "#/components/schemas/Optimization" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /results:
+    get:
+      tags: [Optimization]
+      summary: Historial de corridas
+      responses:
+        "200": { content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Optimization" } } } } }
+  /results/{id}:
+    parameters: [ { name: id, in: path, required: true, schema: { type: integer } } ]
+    get:
+      tags: [Optimization]
+      summary: Corrida con su plan de producción
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Optimization" }
+                  - type: object
+                    properties:
+                      results: { type: array, items: { $ref: "#/components/schemas/OptimizationResult" } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+# ══════════════════════════════════════════════════════════════════════════════
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  parameters:
+    ScenarioId: { name: scenario_id, in: path, required: true, schema: { type: integer } }
+    ProductId: { name: product_id, in: path, required: true, schema: { type: integer } }
+    IngredientId: { name: ingredient_id, in: path, required: true, schema: { type: integer } }
+
+  responses:
+    BadRequest:
+      description: Dominio inválido
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    NotFound:
+      description: No encontrado
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Conflict:
+      description: Conflicto (nombre duplicado, escenario congelado)
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    ScenarioOne:
+      description: Un escenario
+      content: { application/json: { schema: { $ref: "#/components/schemas/Scenario" } } }
+    ScenarioDetail:
+      description: Escenario con dominio completo
+      content:
+        application/json:
+          schema:
+            allOf:
+              - { $ref: "#/components/schemas/Scenario" }
+              - type: object
+                properties:
+                  products: { type: array, items: { $ref: "#/components/schemas/Product" } }
+                  ingredients: { type: array, items: { $ref: "#/components/schemas/Ingredient" } }
+                  machines: { type: array, items: { $ref: "#/components/schemas/Machine" } }
+                  operational_resources: { type: array, items: { $ref: "#/components/schemas/OperationalResource" } }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string, description: Mensaje legible; el front lo muestra tal cual }
+
+    ScenarioStatus:
+      type: string
+      enum: [draft, frozen, archived]
+    OptimizationStatus:
+      type: string
+      enum: [pending, processing, done, error, cancelled]
+
+    Scenario:
+      type: object
+      required: [id, name, status, max_production, min_variety]
+      properties:
+        id: { type: integer }
+        name: { type: string, minLength: 1 }
+        notes: { type: string }
+        status: { $ref: "#/components/schemas/ScenarioStatus" }
+        is_base: { type: boolean }
+        parent_id: { type: [integer, "null"] }
+        max_production: { type: number, minimum: 0, default: 200, description: LINGO M }
+        min_variety: { type: integer, minimum: 0, default: 7, description: LINGO PRO }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ScenarioCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        notes: { type: string }
+        max_production: { type: number, minimum: 0 }
+        min_variety: { type: integer, minimum: 0 }
+    ScenarioUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        notes: { type: string }
+        max_production: { type: number, minimum: 0 }
+        min_variety: { type: integer, minimum: 0 }
+
+    Product:
+      type: object
+      required: [id, scenario_id, name, sale_price, demand, min_batch, max_batch]
+      properties:
+        id: { type: integer }
+        scenario_id: { type: integer }
+        canonical_id: { type: [integer, "null"], description: Identidad cruzada entre escenarios }
+        name: { type: string, minLength: 1 }
+        sale_price: { type: number, minimum: 0, description: LINGO P }
+        demand: { type: number, minimum: 0, description: LINGO D }
+        min_batch: { type: number, minimum: 0, description: LINGO LI }
+        max_batch: { type: number, minimum: 0, description: "LINGO LS — invariante: >= min_batch" }
+    ProductInput:
+      type: object
+      required: [name]
+      description: "Numéricos SIN required: 0 es válido (invariante A2)."
+      properties:
+        name: { type: string, minLength: 1 }
+        sale_price: { type: number, minimum: 0 }
+        demand: { type: number, minimum: 0 }
+        min_batch: { type: number, minimum: 0 }
+        max_batch: { type: number, minimum: 0 }
+
+    Ingredient:
+      type: object
+      required: [id, scenario_id, name, unit, unit_cost, stock_available]
+      properties:
+        id: { type: integer }
+        scenario_id: { type: integer }
+        canonical_id: { type: [integer, "null"] }
+        name: { type: string, minLength: 1 }
+        unit: { type: string, minLength: 1, description: "kg, l, u" }
+        unit_cost: { type: number, minimum: 0, description: LINGO CU }
+        stock_available: { type: number, minimum: 0, description: LINGO IN }
+    IngredientInput:
+      type: object
+      required: [name, unit]
+      properties:
+        name: { type: string, minLength: 1 }
+        unit: { type: string, minLength: 1 }
+        unit_cost: { type: number, minimum: 0 }
+        stock_available: { type: number, minimum: 0 }
+
+    Machine:
+      type: object
+      required: [id, scenario_id, name, hours_available]
+      properties:
+        id: { type: integer }
+        scenario_id: { type: integer }
+        canonical_id: { type: [integer, "null"] }
+        name: { type: string, minLength: 1 }
+        hours_available: { type: number, minimum: 0, description: "LINGO CAP (×60 → min)" }
+    MachineInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        hours_available: { type: number, minimum: 0 }
+
+    OperationalResource:
+      type: object
+      required: [id, scenario_id, name, available, cost_per_unit]
+      properties:
+        id: { type: integer }
+        scenario_id: { type: integer }
+        canonical_id: { type: [integer, "null"] }
+        name: { type: string, minLength: 1 }
+        available: { type: number, minimum: 0, description: LINGO DISP }
+        cost_per_unit: { type: number, minimum: 0, description: LINGO CR }
+    OperationalResourceInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        available: { type: number, minimum: 0 }
+        cost_per_unit: { type: number, minimum: 0 }
+
+    Optimization:
+      type: object
+      required: [id, job_id, status]
+      properties:
+        id: { type: integer }
+        scenario_id: { type: [integer, "null"] }
+        job_id: { type: string }
+        status: { $ref: "#/components/schemas/OptimizationStatus" }
+        max_production: { type: number, minimum: 0 }
+        min_variety: { type: integer, minimum: 0 }
+        total_profit: { type: number }
+        created_at: { type: string, format: date-time }
+        started_at: { type: [string, "null"], format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+    OptimizationResult:
+      type: object
+      required: [id, product_name, quantity_to_produce, expected_profit]
+      properties:
+        id: { type: integer }
+        optimization_id: { type: integer }
+        product_id: { type: [integer, "null"] }
+        canonical_product_id: { type: [integer, "null"] }
+        product_name: { type: string, description: Denormalizado — resultado autocontenido }
+        quantity_to_produce: { type: number, minimum: 0, description: LINGO X }
+        batch_active: { type: number, enum: [0, 1], description: LINGO Y }
+        variety_flag: { type: number, enum: [0, 1], description: LINGO W }
+        expected_profit: { type: number }
