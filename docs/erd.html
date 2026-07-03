@@ -1,0 +1,387 @@
+<title>Modelo de datos — lingo-backend</title>
+<style>
+  :root {
+    --bg: #f5f7fa;
+    --panel: #ffffff;
+    --panel-2: #fbfcfe;
+    --ink: #1a2331;
+    --muted: #64728a;
+    --faint: #8a97ad;
+    --line: #e3e8f0;
+    --line-strong: #cfd7e5;
+    --accent: #2f6feb;
+    --scenario: #7a5cff;
+    --domain: #0d9f8c;
+    --run: #d3821a;
+    --cascade: #cf7a1c;
+    --setnull: #2f6feb;
+    --archive: #159a63;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117; --panel: #151b24; --panel-2: #121820;
+      --ink: #e7ecf4; --muted: #94a1b8; --faint: #6b7889;
+      --line: #232c3a; --line-strong: #2f3a4b;
+      --accent: #5b8bff; --scenario: #9d86ff; --domain: #33c2ae;
+      --run: #e8a44e; --cascade: #e8a44e; --setnull: #5b8bff; --archive: #35b878;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f5f7fa; --panel: #ffffff; --panel-2: #fbfcfe;
+    --ink: #1a2331; --muted: #64728a; --faint: #8a97ad;
+    --line: #e3e8f0; --line-strong: #cfd7e5;
+    --accent: #2f6feb; --scenario: #7a5cff; --domain: #0d9f8c;
+    --run: #d3821a; --cascade: #cf7a1c; --setnull: #2f6feb; --archive: #159a63;
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1117; --panel: #151b24; --panel-2: #121820;
+    --ink: #e7ecf4; --muted: #94a1b8; --faint: #6b7889;
+    --line: #232c3a; --line-strong: #2f3a4b;
+    --accent: #5b8bff; --scenario: #9d86ff; --domain: #33c2ae;
+    --run: #e8a44e; --cascade: #e8a44e; --setnull: #5b8bff; --archive: #35b878;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1140px; margin: 0 auto; padding: 40px 24px 64px; }
+
+  header.masthead { border-bottom: 1px solid var(--line); padding-bottom: 22px; margin-bottom: 28px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--accent); font-weight: 600;
+  }
+  h1 {
+    font-size: clamp(24px, 3.4vw, 34px); margin: 8px 0 6px; letter-spacing: -.02em;
+    text-wrap: balance; font-weight: 680;
+  }
+  .sub { color: var(--muted); font-size: 15px; max-width: 62ch; }
+  .sub code { font-family: var(--mono); font-size: .88em; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; border: 1px solid var(--line); }
+
+  /* legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 14px 20px; margin-top: 18px; align-items: center; }
+  .legend .grp { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); }
+  .badge {
+    font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: .02em;
+    padding: 2px 6px; border-radius: 5px; border: 1px solid var(--line-strong);
+    color: var(--muted); background: var(--panel-2); white-space: nowrap;
+  }
+  .badge.pk { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--line-strong)); }
+  .badge.fk { color: var(--setnull); border-color: color-mix(in srgb, var(--setnull) 40%, var(--line-strong)); }
+  .badge.canon { color: var(--scenario); border-color: color-mix(in srgb, var(--scenario) 45%, var(--line-strong)); }
+  .chip {
+    font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: .03em;
+    padding: 2px 7px; border-radius: 20px; white-space: nowrap;
+    text-transform: uppercase;
+  }
+  .chip.cascade { color: var(--cascade); background: color-mix(in srgb, var(--cascade) 15%, transparent); }
+  .chip.setnull { color: var(--setnull); background: color-mix(in srgb, var(--setnull) 15%, transparent); }
+  .chip.archive { color: var(--archive); background: color-mix(in srgb, var(--archive) 16%, transparent); }
+
+  /* layer bands */
+  .layer { margin-top: 34px; }
+  .layer-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+  .layer-tag {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+    font-weight: 700; padding: 3px 9px; border-radius: 6px; color: #fff;
+  }
+  .layer.scenario .layer-tag { background: var(--scenario); }
+  .layer.domain   .layer-tag { background: var(--domain); }
+  .layer.run      .layer-tag { background: var(--run); }
+  .layer-desc { color: var(--muted); font-size: 13.5px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 16px; }
+
+  /* entity card = mini ER table */
+  .ent {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 11px;
+    overflow: hidden; display: flex; flex-direction: column;
+  }
+  .ent > .ent-h {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 11px 13px; border-bottom: 1px solid var(--line);
+    background: var(--panel-2);
+  }
+  .layer.scenario .ent { border-top: 3px solid var(--scenario); }
+  .layer.domain   .ent { border-top: 3px solid var(--domain); }
+  .layer.run      .ent { border-top: 3px solid var(--run); }
+  .ent-name { font-weight: 650; font-size: 14.5px; letter-spacing: -.01em; }
+  .ent-lingo { font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+  .ent.join .ent-name::before { content: "⋈ "; color: var(--faint); }
+
+  .rows { display: flex; flex-direction: column; }
+  .row {
+    display: grid; grid-template-columns: 1fr auto; gap: 6px 8px; align-items: baseline;
+    padding: 6px 13px; border-bottom: 1px solid var(--line);
+    font-size: 12.5px;
+  }
+  .row:last-child { border-bottom: 0; }
+  .row .f { font-family: var(--mono); font-size: 12px; color: var(--ink); }
+  .row .t { font-family: var(--mono); font-size: 11px; color: var(--faint); }
+  .row .dom { grid-column: 1 / -1; color: var(--muted); font-size: 11.5px; margin-top: -1px; }
+  .row .b { display: inline-flex; gap: 4px; }
+  .row.key .f { font-weight: 600; }
+
+  .note { margin-top: 40px; padding: 16px 18px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; background: var(--panel); color: var(--muted); font-size: 13px; }
+  .note b { color: var(--ink); }
+
+  /* relationships table */
+  h2.sec { font-size: 18px; margin: 46px 0 4px; letter-spacing: -.01em; }
+  .sec-sub { color: var(--muted); font-size: 13.5px; margin-bottom: 16px; }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 11px; background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 13px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); font-weight: 600; background: var(--panel-2); }
+  tr:last-child td { border-bottom: 0; }
+  td .rel { font-family: var(--mono); font-size: 12px; }
+  td .arrow { color: var(--faint); }
+  .card-tone { color: var(--muted); }
+
+  footer { margin-top: 46px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--faint); font-size: 12.5px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  footer code { font-family: var(--mono); }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div class="eyebrow">Modelo de datos · v1 (objetivo)</div>
+    <h1>Optimización de producción — esquema</h1>
+    <p class="sub">Escenarios instanciados + fork. Cada entidad de dominio pertenece a un escenario y guarda sus parámetros; el escenario es la unidad clonable del what-if. Fuente autoritativa: <code>docs/02-data-dictionary.md</code>.</p>
+    <div class="legend">
+      <span class="grp"><span class="badge pk">PK</span> clave primaria</span>
+      <span class="grp"><span class="badge fk">FK→</span> referencia</span>
+      <span class="grp"><span class="badge canon">canon</span> identidad cruzada</span>
+      <span class="grp"><span class="chip cascade">cascade</span></span>
+      <span class="grp"><span class="chip setnull">set null</span></span>
+      <span class="grp"><span class="chip archive">archivar</span></span>
+    </div>
+  </header>
+
+  <!-- LAYER 1 -->
+  <section class="layer scenario">
+    <div class="layer-head">
+      <span class="layer-tag">Escenario</span>
+      <span class="layer-desc">Contenedor / un "plan". Unidad de clonación del what-if.</span>
+    </div>
+    <div class="grid">
+      <div class="ent">
+        <div class="ent-h"><span class="ent-name">Scenario</span></div>
+        <div class="rows">
+          <div class="row key"><span class="f">id</span><span class="b"><span class="badge pk">PK</span></span></div>
+          <div class="row"><span class="f">name</span><span class="t">string</span><span class="dom">no vacío · único entre no-archivados</span></div>
+          <div class="row"><span class="f">status</span><span class="t">enum</span><span class="dom">draft · frozen · archived</span></div>
+          <div class="row"><span class="f">is_base</span><span class="t">bool</span><span class="dom">el plan canónico del día</span></div>
+          <div class="row"><span class="f">parent_id</span><span class="b"><span class="badge fk">FK→Scenario</span></span><span class="dom">forkeado de · nullable</span></div>
+          <div class="row"><span class="f">max_production</span><span class="t">float ≥0</span><span class="dom">LINGO M · default 200</span></div>
+          <div class="row"><span class="f">min_variety</span><span class="t">int ≥0</span><span class="dom">LINGO PRO · default 7</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LAYER 2 -->
+  <section class="layer domain">
+    <div class="layer-head">
+      <span class="layer-tag">Dominio</span>
+      <span class="layer-desc">Instanciado por escenario — cada fila lleva <code style="font-family:var(--mono);font-size:12px">scenario_id</code>. Nombres únicos por escenario. Todo numérico ≥0 y 0 es válido.</span>
+    </div>
+    <div class="grid">
+
+      <div class="ent">
+        <div class="ent-h"><span class="ent-name">Product</span><span class="ent-lingo">P·D·LI·LS</span></div>
+        <div class="rows">
+          <div class="row key"><span class="f">id</span><span class="b"><span class="badge pk">PK</span></span></div>
+          <div class="row"><span class="f">scenario_id</span><span class="b"><span class="badge fk">FK→Scenario</span></span></div>
+          <div class="row"><span class="f">canonical_id</span><span class="b"><span class="badge canon">canon</span></span></div>
+          <div class="row"><span class="f">name</span><span class="t">string</span></div>
+          <div class="row"><span class="f">sale_price</span><span class="t">float ≥0</span><span class="dom">P</span></div>
+          <div class="row"><span class="f">demand</span><span class="t">float ≥0</span><span class="dom">D</span></div>
+          <div class="row"><span class="f">min_batch</span><span class="t">float ≥0</span><span class="dom">LI</span></div>
+          <div class="row"><span class="f">max_batch</span><span class="t">float</span><span class="dom">LS · ≥ min_batch</span></div>
+        </div>
+      </div>
+
+      <div class="ent">
+        <div class="ent-h"><span class="ent-name">Ingredient</span><span class="ent-lingo">CU·IN</span></div>
+        <div class="rows">
+          <div class="row key"><span class="f">id</span><span class="b"><span class="badge pk">PK</span></span></div>
+          <div class="row"><span class="f">scenario_id</span><span class="b"><span class="badge fk">FK→Scenario</span></span></div>
+          <div class="row"><span class="f">canonical_id</span><span class="b"><span class="badge canon">canon</span></span></div>
+          <div class="row"><span class="f">name</span><span class="t">string</span></div>
+          <div class="row"><span class="f">unit</span><span class="t">string</span><span class="dom">kg · l · u</span></div>
+          <div class="row"><span class="f">unit_cost</span><span class="t">float ≥0</span><span class="dom">CU</span></div>
+          <div class="row"><span class="f">stock_available</span><span class="t">float ≥0</span><span class="dom">IN · absorbe StockIngredient</span></div>
+        </div>
+      </div>
+
+      <div class="ent">
+        <div class="ent-h"><span class="ent-name">Machine</span><span class="ent-lingo">CAP</span></div>
+        <div class="rows">
+          <div class="row key"><span class="f">id</span><span class="b"><span class="badge pk">PK</span></span></div>
+          <div class="row"><span class="f">scenario_id</span><span class="b"><span class="badge fk">FK→Scenario</span></span></div>
+          <div class="row"><span class="f">canonical_id</span><span class="b"><span class="badge canon">canon</span></span></div>
+          <div class="row"><span class="f">name</span><span class="t">string</span></div>
+          <div class="row"><span class="f">hours_available</span><span class="t">float ≥0</span><span class="dom">CAP · ×60 → min · absorbe ResourceMachine</span></div>
+        </div>
+      </div>
+
+      <div class="ent">
+        <div class="ent-h"><span class="ent-name">OperationalResource</span><span class="ent-lingo">DISP·CR</span></div>
+        <div class="rows">
+          <div class="row key"><span class="f">id</span><span class="b"><span class="badge pk">PK</span></span></div>
+          <div class="row"><span class="f">scenario_id</span><span class="b"><span class="badge fk">FK→Scenario</span></span></div>
+          <div class="row"><span class="f">canonical_id</span><span class="b"><span class="badge canon">canon</span></span></div>
+          <div class="row"><span class="f">name</span><span class="t">string</span></div>
+          <div class="row"><span class="f">available</span><span class="t">float ≥0</span><span class="dom">DISP</span></div>
+          <div class="row"><span class="f">cost_per_unit</span><span class="t">float ≥0</span><span class="dom">CR</span></div>
+        </div>
+      </div>
+
+      <div class="ent join">
+        <div class="ent-h"><span class="ent-name">ProductIngredient</span><span class="ent-lingo">Q(I,J)</span></div>
+        <div class="rows">
+          <div class="row"><span class="f">scenario_id</span><span class="b"><span class="badge fk">FK</span></span><span class="dom">FK compuesta → mismo escenario</span></div>
+          <div class="row"><span class="f">product_id</span><span class="b"><span class="badge fk">FK</span></span></div>
+          <div class="row"><span class="f">ingredient_id</span><span class="b"><span class="badge fk">FK</span></span></div>
+          <div class="row"><span class="f">quantity</span><span class="t">float ≥0</span><span class="dom">Q · único (product, ingredient)</span></div>
+        </div>
+      </div>
+
+      <div class="ent join">
+        <div class="ent-h"><span class="ent-name">ProductMachine</span><span class="ent-lingo">T(I,K)</span></div>
+        <div class="rows">
+          <div class="row"><span class="f">scenario_id</span><span class="b"><span class="badge fk">FK</span></span></div>
+          <div class="row"><span class="f">product_id</span><span class="b"><span class="badge fk">FK</span></span></div>
+          <div class="row"><span class="f">machine_id</span><span class="b"><span class="badge fk">FK</span></span></div>
+          <div class="row"><span class="f">minutes_per_unit</span><span class="t">float ≥0</span><span class="dom">T · único (product, machine)</span></div>
+        </div>
+      </div>
+
+      <div class="ent join">
+        <div class="ent-h"><span class="ent-name">ProductOperationalResource</span><span class="ent-lingo">CM(I,R)</span></div>
+        <div class="rows">
+          <div class="row"><span class="f">scenario_id</span><span class="b"><span class="badge fk">FK</span></span></div>
+          <div class="row"><span class="f">product_id</span><span class="b"><span class="badge fk">FK</span></span></div>
+          <div class="row"><span class="f">operational_resource_id</span><span class="b"><span class="badge fk">FK</span></span></div>
+          <div class="row"><span class="f">consumption_per_batch</span><span class="t">float ≥0</span><span class="dom">CM · único (product, opres)</span></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- LAYER 3 -->
+  <section class="layer run">
+    <div class="layer-head">
+      <span class="layer-tag">Corrida</span>
+      <span class="layer-desc">Ejecución sobre un escenario congelado. Resultados autocontenidos (nombre denormalizado).</span>
+    </div>
+    <div class="grid">
+
+      <div class="ent">
+        <div class="ent-h"><span class="ent-name">Optimization</span></div>
+        <div class="rows">
+          <div class="row key"><span class="f">id</span><span class="b"><span class="badge pk">PK</span></span></div>
+          <div class="row"><span class="f">scenario_id</span><span class="b"><span class="badge fk">FK→Scenario</span></span><span class="dom">nullable · SET NULL al archivar</span></div>
+          <div class="row"><span class="f">job_id</span><span class="t">string</span><span class="dom">único · id de cola</span></div>
+          <div class="row"><span class="f">status</span><span class="t">enum</span><span class="dom">pending·processing·done·error·cancelled</span></div>
+          <div class="row"><span class="f">max_production</span><span class="t">float</span><span class="dom">M efectivo</span></div>
+          <div class="row"><span class="f">min_variety</span><span class="t">int</span><span class="dom">PRO efectivo</span></div>
+          <div class="row"><span class="f">total_profit</span><span class="t">float</span><span class="dom">objetivo</span></div>
+        </div>
+      </div>
+
+      <div class="ent">
+        <div class="ent-h"><span class="ent-name">OptimizationResult</span><span class="ent-lingo">X·Y·W</span></div>
+        <div class="rows">
+          <div class="row key"><span class="f">id</span><span class="b"><span class="badge pk">PK</span></span></div>
+          <div class="row"><span class="f">optimization_id</span><span class="b"><span class="badge fk">FK</span></span></div>
+          <div class="row"><span class="f">product_id</span><span class="b"><span class="badge fk">FK</span></span><span class="dom">nullable · link blando</span></div>
+          <div class="row"><span class="f">canonical_product_id</span><span class="b"><span class="badge canon">canon</span></span><span class="dom">analítica cruzada</span></div>
+          <div class="row"><span class="f">product_name</span><span class="t">string</span><span class="dom">denormalizado → autocontenido</span></div>
+          <div class="row"><span class="f">quantity_to_produce</span><span class="t">float ≥0</span><span class="dom">X</span></div>
+          <div class="row"><span class="f">batch_active</span><span class="t">0|1</span><span class="dom">Y</span></div>
+          <div class="row"><span class="f">variety_flag</span><span class="t">0|1</span><span class="dom">W</span></div>
+          <div class="row"><span class="f">expected_profit</span><span class="t">float</span></div>
+        </div>
+      </div>
+
+      <div class="ent">
+        <div class="ent-h"><span class="ent-name">LingoLog</span></div>
+        <div class="rows">
+          <div class="row key"><span class="f">id</span><span class="b"><span class="badge pk">PK</span></span></div>
+          <div class="row"><span class="f">job_id</span><span class="t">string</span></div>
+          <div class="row"><span class="f">optimization_id</span><span class="b"><span class="badge fk">FK</span></span></div>
+          <div class="row"><span class="f">level</span><span class="t">info|error</span></div>
+          <div class="row"><span class="f">model_generated</span><span class="t">text</span><span class="dom">el .lng armado</span></div>
+          <div class="row"><span class="f">lingo_output</span><span class="t">text</span><span class="dom">salida cruda del solver</span></div>
+          <div class="row"><span class="f">duration_ms</span><span class="t">int</span></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- RELATIONSHIPS -->
+  <h2 class="sec">Relaciones y ciclo de vida</h2>
+  <p class="sec-sub">Ninguna relación usa <span class="rel" style="font-family:var(--mono)">RESTRICT</span> — la historia se protege archivando identidades y denormalizando resultados, no candando filas. Por eso la clase de bug "no se puede eliminar" desaparece.</p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>Relación</th><th>Cardinalidad</th><th>Al borrar</th><th>Por qué</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="rel">Scenario → Product / Ingredient / Machine / OpResource</span></td>
+          <td class="card-tone">1 : N</td>
+          <td><span class="chip cascade">cascade</span></td>
+          <td class="card-tone">Draft descartable se lleva sus entidades locales</td>
+        </tr>
+        <tr>
+          <td><span class="rel">Product → ProductIngredient / Machine / OpRes</span></td>
+          <td class="card-tone">1 : N</td>
+          <td><span class="chip cascade">cascade</span></td>
+          <td class="card-tone">La receta no tiene sentido sin el producto. Sin bloqueo cruzado</td>
+        </tr>
+        <tr>
+          <td><span class="rel">Scenario → Optimization</span></td>
+          <td class="card-tone">1 : N</td>
+          <td><span class="chip setnull">set null</span></td>
+          <td class="card-tone">La corrida sobrevive al archivado del escenario (autocontenida)</td>
+        </tr>
+        <tr>
+          <td><span class="rel">Product → OptimizationResult</span></td>
+          <td class="card-tone">1 : N</td>
+          <td><span class="chip setnull">set null</span></td>
+          <td class="card-tone">Conserva product_name y canonical_product_id</td>
+        </tr>
+        <tr>
+          <td><span class="rel">Optimization → OptimizationResult</span></td>
+          <td class="card-tone">1 : N</td>
+          <td><span class="chip cascade">cascade</span></td>
+          <td class="card-tone">Los resultados pertenecen a la corrida</td>
+        </tr>
+        <tr>
+          <td><span class="rel">Identidad con historia (canónica)</span></td>
+          <td class="card-tone">—</td>
+          <td><span class="chip archive">archivar</span></td>
+          <td class="card-tone">Ancla permanente; canonical_id nunca queda colgado</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note">
+    <b>Máquina de estados del escenario.</b> <code style="font-family:var(--mono)">draft</code> (editable) → al optimizar pasa a <code style="font-family:var(--mono)">frozen</code> (inmutable, la foto de los inputs) → editar un frozen <b>forkea</b> un nuevo draft con <code style="font-family:var(--mono)">parent_id</code>. Se archiva, no se borra. Esto reemplaza el <code style="font-family:var(--mono)">input_snapshot</code> JSON del modelo singleton anterior.
+  </div>
+
+  <footer>
+    <span>lingo-backend · esquema objetivo v1 · deriva de <code>docs/02-data-dictionary.md</code></span>
+    <span>ADR 0003 · escenarios instanciados + fork</span>
+  </footer>
+</div>
