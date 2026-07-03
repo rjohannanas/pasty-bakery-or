@@ -60,12 +60,12 @@ func CreateResource(db *gorm.DB) gin.HandlerFunc {
 			Name        string  `json:"name" binding:"required"`
 			Machines    []struct {
 				MachineID      uint    `json:"machine_id" binding:"required"`
-				HoursAvailable float64 `json:"hours_available" binding:"required"`
+				HoursAvailable float64 `json:"hours_available"`
 			} `json:"machines"`
 			OperationalResources []struct {
 				Name        string  `json:"name" binding:"required"`
-				Available   float64 `json:"available" binding:"required"`
-				CostPerUnit float64 `json:"cost_per_unit" binding:"required"`
+				Available   float64 `json:"available"`
+				CostPerUnit float64 `json:"cost_per_unit"`
 			} `json:"operational_resources"`
 		}
 
@@ -124,7 +124,10 @@ func UpsertResourceMachine(db *gorm.DB) gin.HandlerFunc {
 		resourceID := c.Param("id")
 		machineID := c.Param("machine_id")
 		var input struct {
-			HoursAvailable float64 `json:"hours_available" binding:"required"`
+			// Sin binding:"required": 0 es válido (máquina recién dada de alta, aún
+			// sin horas asignadas). Con required, GORM rechaza 0 y el auto-ligado
+			// del front tira 400.
+			HoursAvailable float64 `json:"hours_available"`
 		}
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -185,8 +188,8 @@ func AddResourceOperationalResource(db *gorm.DB) gin.HandlerFunc {
 		resourceID := c.Param("id")
 		var input struct {
 			Name        string  `json:"name" binding:"required"`
-			Available   float64 `json:"available" binding:"required"`
-			CostPerUnit float64 `json:"cost_per_unit" binding:"required"`
+			Available   float64 `json:"available"`
+			CostPerUnit float64 `json:"cost_per_unit"`
 		}
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

@@ -59,7 +59,7 @@ func CreateStock(db *gorm.DB) gin.HandlerFunc {
 			Name        string `json:"name" binding:"required"`
 			Ingredients []struct {
 				IngredientID      uint    `json:"ingredient_id" binding:"required"`
-				QuantityAvailable float64 `json:"quantity_available" binding:"required"`
+				QuantityAvailable float64 `json:"quantity_available"`
 			} `json:"ingredients"`
 		}
 
@@ -131,7 +131,10 @@ func UpsertStockIngredient(db *gorm.DB) gin.HandlerFunc {
 		stockID := c.Param("id")
 		ingredientID := c.Param("ingredient_id")
 		var input struct {
-			QuantityAvailable float64 `json:"quantity_available" binding:"required"`
+			// Sin binding:"required": 0 es una cantidad válida (ingrediente recién
+			// dado de alta, aún sin stock). Con required, GORM rechaza 0 y el
+			// auto-ligado del front tira 400.
+			QuantityAvailable float64 `json:"quantity_available"`
 		}
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

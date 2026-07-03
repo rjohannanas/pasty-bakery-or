@@ -62,8 +62,8 @@ func CreateProduct(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var input struct {
 			Name      string  `json:"name" binding:"required"`
-			SalePrice float64 `json:"sale_price" binding:"required"`
-			Demand    float64 `json:"demand" binding:"required"`
+			SalePrice float64 `json:"sale_price"`
+			Demand    float64 `json:"demand"`
 			MinBatch  float64 `json:"min_batch"`
 			MaxBatch  float64 `json:"max_batch"`
 		}
@@ -149,7 +149,7 @@ func AddProductIngredient(db *gorm.DB) gin.HandlerFunc {
 		productID := c.Param("id")
 		var input struct {
 			IngredientID uint    `json:"ingredient_id" binding:"required"`
-			Quantity     float64 `json:"quantity" binding:"required"`
+			Quantity     float64 `json:"quantity"`
 		}
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -193,7 +193,7 @@ func UpdateProductIngredient(db *gorm.DB) gin.HandlerFunc {
 		productID := c.Param("id")
 		ingredientID := c.Param("ing_id")
 		var input struct {
-			Quantity float64 `json:"quantity" binding:"required"`
+			Quantity float64 `json:"quantity"`
 		}
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -226,7 +226,7 @@ func AddProductMachine(db *gorm.DB) gin.HandlerFunc {
 		productID := c.Param("id")
 		var input struct {
 			MachineID      uint    `json:"machine_id" binding:"required"`
-			MinutesPerUnit float64 `json:"minutes_per_unit" binding:"required"`
+			MinutesPerUnit float64 `json:"minutes_per_unit"`
 		}
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -269,7 +269,7 @@ func UpdateProductMachine(db *gorm.DB) gin.HandlerFunc {
 		productID := c.Param("id")
 		machineID := c.Param("machine_id")
 		var input struct {
-			MinutesPerUnit float64 `json:"minutes_per_unit" binding:"required"`
+			MinutesPerUnit float64 `json:"minutes_per_unit"`
 		}
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -302,7 +302,7 @@ func AddProductOperationalResource(db *gorm.DB) gin.HandlerFunc {
 		productID := c.Param("id")
 		var input struct {
 			OperationalResourceID uint    `json:"operational_resource_id" binding:"required"`
-			ConsumptionPerBatch   float64 `json:"consumption_per_batch" binding:"required"`
+			ConsumptionPerBatch   float64 `json:"consumption_per_batch"`
 		}
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -345,7 +345,7 @@ func UpdateProductOperationalResource(db *gorm.DB) gin.HandlerFunc {
 		productID := c.Param("id")
 		opresID := c.Param("opres_id")
 		var input struct {
-			ConsumptionPerBatch float64 `json:"consumption_per_batch" binding:"required"`
+			ConsumptionPerBatch float64 `json:"consumption_per_batch"`
 		}
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
