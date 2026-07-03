@@ -9,11 +9,12 @@ import (
 	"lingo-backend/internal/models"
 )
 
-// Máquinas scoped al escenario (/scenarios/:scenario_id/machines).
+// Recursos operativos scoped al escenario
+// (/scenarios/:scenario_id/operational-resources).
 
-func ListMachines(db *gorm.DB) gin.HandlerFunc {
+func ListOperationalResources(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var items []models.Machine
+		var items []models.OperationalResource
 		if err := db.Where("scenario_id = ?", c.Param("scenario_id")).Order("id").Find(&items).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -22,29 +23,30 @@ func ListMachines(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func GetMachine(db *gorm.DB) gin.HandlerFunc {
+func GetOperationalResource(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var it models.Machine
-		if err := db.Where("scenario_id = ?", c.Param("scenario_id")).First(&it, c.Param("machine_id")).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Máquina no encontrada"})
+		var it models.OperationalResource
+		if err := db.Where("scenario_id = ?", c.Param("scenario_id")).First(&it, c.Param("opres_id")).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Recurso operativo no encontrado"})
 			return
 		}
 		c.JSON(http.StatusOK, it)
 	}
 }
 
-type machineInput struct {
-	Name           *string  `json:"name"`
-	HoursAvailable *float64 `json:"hours_available"`
+type opresInput struct {
+	Name        *string  `json:"name"`
+	Available   *float64 `json:"available"`
+	CostPerUnit *float64 `json:"cost_per_unit"`
 }
 
-func CreateMachine(db *gorm.DB) gin.HandlerFunc {
+func CreateOperationalResource(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		s, ok := getScenario(db, c)
 		if !ok || !requireDraft(c, s) {
 			return
 		}
-		var in machineInput
+		var in opresInput
 		if err := c.ShouldBindJSON(&in); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -53,10 +55,8 @@ func CreateMachine(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "name es obligatorio"})
 			return
 		}
-		it := models.Machine{ScenarioID: s.ID, Name: *in.Name}
-		if in.HoursAvailable != nil {
-			it.HoursAvailable = *in.HoursAvailable
-		}
+		it := models.OperationalResource{ScenarioID: s.ID, Name: *in.Name}
+		applyOpresInput(&it, in)
 		if err := db.Create(&it).Error; err != nil {
 			c.JSON(http.StatusConflict, gin.H{"error": "No se pudo crear (¿nombre duplicado en el escenario?)"})
 			return
@@ -65,18 +65,18 @@ func CreateMachine(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func UpdateMachine(db *gorm.DB) gin.HandlerFunc {
+func UpdateOperationalResource(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		s, ok := getScenario(db, c)
 		if !ok || !requireDraft(c, s) {
 			return
 		}
-		var it models.Machine
-		if err := db.Where("scenario_id = ?", s.ID).First(&it, c.Param("machine_id")).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Máquina no encontrada"})
+		var it models.OperationalResource
+		if err := db.Where("scenario_id = ?", s.ID).First(&it, c.Param("opres_id")).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Recurso operativo no encontrado"})
 			return
 		}
-		var in machineInput
+		var in opresInput
 		if err := c.ShouldBindJSON(&in); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -84,9 +84,7 @@ func UpdateMachine(db *gorm.DB) gin.HandlerFunc {
 		if in.Name != nil {
 			it.Name = *in.Name
 		}
-		if in.HoursAvailable != nil {
-			it.HoursAvailable = *in.HoursAvailable
-		}
+		applyOpresInput(&it, in)
 		if err := db.Save(&it).Error; err != nil {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			return
@@ -95,16 +93,25 @@ func UpdateMachine(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func DeleteMachine(db *gorm.DB) gin.HandlerFunc {
+func DeleteOperationalResource(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		s, ok := getScenario(db, c)
 		if !ok || !requireDraft(c, s) {
 			return
 		}
-		if err := db.Where("scenario_id = ?", s.ID).Delete(&models.Machine{}, c.Param("machine_id")).Error; err != nil {
+		if err := db.Where("scenario_id = ?", s.ID).Delete(&models.OperationalResource{}, c.Param("opres_id")).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusNoContent, nil)
+	}
+}
+
+func applyOpresInput(it *models.OperationalResource, in opresInput) {
+	if in.Available != nil {
+		it.Available = *in.Available
+	}
+	if in.CostPerUnit != nil {
+		it.CostPerUnit = *in.CostPerUnit
 	}
 }

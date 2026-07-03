@@ -84,13 +84,6 @@ func processJob(ctx context.Context, db *gorm.DB, q *queue.Client, hub *ws.Hub, 
 		return
 	}
 
-	// Snapshot de la config de entrada (best-effort: si falla, no aborta el job).
-	if snap, snapErr := solver.BuildSnapshot(db, &opt); snapErr != nil {
-		logger.L.Warn().Err(snapErr).Str("job_id", jobID).Msg("[WORKER] No se pudo guardar el snapshot de entrada")
-	} else if err := db.Model(&models.Optimization{}).Where("job_id = ?", jobID).Update("input_snapshot", snap).Error; err != nil {
-		logger.L.Warn().Err(err).Str("job_id", jobID).Msg("[WORKER] No se pudo persistir el snapshot de entrada")
-	}
-
 	// 3. Ejecutar LINGO
 	startTime := time.Now()
 	output, err := solver.RunLINGO(ctx, jobID, modelStr)
@@ -148,13 +141,16 @@ func processJob(ctx context.Context, db *gorm.DB, q *queue.Client, hub *ws.Hub, 
 
 			profit := (p.SalePrice * x) - (x * ingCostSum) - (y * resCostSum)
 
+			pid := p.ID
 			res := models.OptimizationResult{
-				OptimizationID:    opt.ID,
-				ProductID:         p.ID,
-				QuantityToProduce: x,
-				BatchActive:       y,
-				VarietyFlag:       w,
-				ExpectedProfit:    profit,
+				OptimizationID:     opt.ID,
+				ProductID:          &pid,
+				CanonicalProductID: p.CanonicalID,
+				ProductName:        p.Name,
+				QuantityToProduce:  x,
+				BatchActive:        y,
+				VarietyFlag:        w,
+				ExpectedProfit:     profit,
 			}
 			if err := tx.Create(&res).Error; err != nil {
 				return err

@@ -1,27 +1,23 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+
 	"lingo-backend/internal/models"
 )
 
-// ─── PRODUCT CRUD ───────────────────────────────────────────────────────────
+// Productos scoped al escenario (/scenarios/:scenario_id/products).
 
-// ListProducts lista todos los productos registrados
-// @Summary Listar productos
-// @Description Obtiene la lista completa de productos con sus precios y costos
-// @Tags Products
-// @Produce json
-// @Success 200 {array} models.Product
-// @Router /products [get]
 func ListProducts(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var products []models.Product
-		if err := db.Find(&products).Error; err != nil {
+		if err := db.
+			Preload("Ingredients.Ingredient").Preload("Machines.Machine").
+			Preload("OperationalResources.OperationalResource").
+			Where("scenario_id = ?", c.Param("scenario_id")).Order("id").Find(&products).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
@@ -29,346 +25,257 @@ func ListProducts(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-// GetProduct obtiene un producto con sus recetas de ingredientes y máquinas
-// @Summary Obtener producto
-// @Description Obtiene detalles de un producto, incluyendo ingredientes y máquinas asignadas
-// @Tags Products
-// @Produce json
-// @Param id path int true "ID del producto"
-// @Success 200 {object} models.Product
-// @Router /products/{id} [get]
 func GetProduct(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		id := c.Param("id")
-		var product models.Product
-		if err := db.Preload("Ingredients.Ingredient").Preload("Machines.Machine").Preload("OperationalResources.OperationalResource").First(&product, id).Error; err != nil {
+		var p models.Product
+		if err := db.
+			Preload("Ingredients.Ingredient").Preload("Machines.Machine").
+			Preload("OperationalResources.OperationalResource").
+			Where("scenario_id = ?", c.Param("scenario_id")).First(&p, c.Param("product_id")).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Producto no encontrado"})
 			return
 		}
-		c.JSON(http.StatusOK, product)
+		c.JSON(http.StatusOK, p)
 	}
 }
 
-// CreateProduct crea un nuevo producto base
-// @Summary Crear producto
-// @Description Registra un nuevo producto en el catálogo
-// @Tags Products
-// @Accept json
-// @Produce json
-// @Param input body models.Product true "Datos del producto"
-// @Success 201 {object} models.Product
-// @Router /products [post]
+// productInput: numéricos SIN binding:required (invariante A2 — 0 es válido).
+type productInput struct {
+	Name      *string  `json:"name"`
+	SalePrice *float64 `json:"sale_price"`
+	Demand    *float64 `json:"demand"`
+	MinBatch  *float64 `json:"min_batch"`
+	MaxBatch  *float64 `json:"max_batch"`
+}
+
 func CreateProduct(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var input struct {
-			Name      string  `json:"name" binding:"required"`
-			SalePrice float64 `json:"sale_price"`
-			Demand    float64 `json:"demand"`
-			MinBatch  float64 `json:"min_batch"`
-			MaxBatch  float64 `json:"max_batch"`
+		s, ok := getScenario(db, c)
+		if !ok {
+			return
 		}
-		if err := c.ShouldBindJSON(&input); err != nil {
+		if !requireDraft(c, s) {
+			return
+		}
+		var in productInput
+		if err := c.ShouldBindJSON(&in); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		product := models.Product{
-			Name:      input.Name,
-			SalePrice: input.SalePrice,
-			Demand:    input.Demand,
-			MinBatch:  input.MinBatch,
-			MaxBatch:  input.MaxBatch,
-		}
-		if err := db.Create(&product).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if in.Name == nil || *in.Name == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "name es obligatorio"})
 			return
 		}
-		c.JSON(http.StatusCreated, product)
+		p := models.Product{ScenarioID: s.ID, Name: *in.Name}
+		applyProductInput(&p, in)
+		if err := db.Create(&p).Error; err != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "No se pudo crear (¿nombre duplicado en el escenario?)"})
+			return
+		}
+		c.JSON(http.StatusCreated, p)
 	}
 }
 
 func UpdateProduct(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		id := c.Param("id")
-		var product models.Product
-		if err := db.First(&product, id).Error; err != nil {
+		s, ok := getScenario(db, c)
+		if !ok {
+			return
+		}
+		if !requireDraft(c, s) {
+			return
+		}
+		var p models.Product
+		if err := db.Where("scenario_id = ?", s.ID).First(&p, c.Param("product_id")).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Producto no encontrado"})
 			return
 		}
-		var input struct {
-			Name      string   `json:"name"`
-			SalePrice float64  `json:"sale_price"`
-			Demand    *float64 `json:"demand"`
-			MinBatch  *float64 `json:"min_batch"`
-			MaxBatch  *float64 `json:"max_batch"`
-		}
-		if err := c.ShouldBindJSON(&input); err != nil {
+		var in productInput
+		if err := c.ShouldBindJSON(&in); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		if input.Name != "" { product.Name = input.Name }
-		if input.SalePrice != 0 { product.SalePrice = input.SalePrice }
-		if input.Demand != nil { product.Demand = *input.Demand }
-		if input.MinBatch != nil { product.MinBatch = *input.MinBatch }
-		if input.MaxBatch != nil { product.MaxBatch = *input.MaxBatch }
-
-		if err := db.Save(&product).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if in.Name != nil {
+			p.Name = *in.Name
+		}
+		applyProductInput(&p, in)
+		if err := db.Save(&p).Error; err != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, product)
+		c.JSON(http.StatusOK, p)
 	}
 }
 
+// DeleteProduct: cascadea la receta por FK; nunca bloquea (ADR 0004).
 func DeleteProduct(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		id := c.Param("id")
-
-		// La receta propia (ingredientes/máquinas/op.resources) cascadea al borrar.
-		// Lo único que protege el borrado es el historial de optimizaciones.
-		var results int64
-		db.Model(&models.OptimizationResult{}).Where("product_id = ?", id).Count(&results)
-		if results > 0 {
-			c.JSON(http.StatusConflict, gin.H{
-				"error": fmt.Sprintf("El producto aparece en %d resultado(s) de optimización del historial y no se puede eliminar.", results),
-			})
+		s, ok := getScenario(db, c)
+		if !ok {
 			return
 		}
-
-		if err := db.Delete(&models.Product{}, id).Error; err != nil {
-			c.JSON(http.StatusConflict, gin.H{"error": "No se puede eliminar el producto"})
+		if !requireDraft(c, s) {
+			return
+		}
+		if err := db.Where("scenario_id = ?", s.ID).Delete(&models.Product{}, c.Param("product_id")).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusNoContent, nil)
 	}
 }
 
-// ─── PRODUCT INGREDIENTS ─────────────────────────────────────────────────────
-
-func AddProductIngredient(db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		productID := c.Param("id")
-		var input struct {
-			IngredientID uint    `json:"ingredient_id" binding:"required"`
-			Quantity     float64 `json:"quantity"`
-		}
-		if err := c.ShouldBindJSON(&input); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		
-		// Validar que el producto existe
-		var pID uint
-		if err := db.Model(&models.Product{}).Select("id").First(&pID, productID).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Producto no encontrado"})
-			return
-		}
-
-		pi := models.ProductIngredient{
-			ProductID:    pID,
-			IngredientID: input.IngredientID,
-			Quantity:     input.Quantity,
-		}
-		if err := db.Create(&pi).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al asignar ingrediente (puede que ya esté asignado)"})
-			return
-		}
-		c.JSON(http.StatusCreated, pi)
+func applyProductInput(p *models.Product, in productInput) {
+	if in.SalePrice != nil {
+		p.SalePrice = *in.SalePrice
+	}
+	if in.Demand != nil {
+		p.Demand = *in.Demand
+	}
+	if in.MinBatch != nil {
+		p.MinBatch = *in.MinBatch
+	}
+	if in.MaxBatch != nil {
+		p.MaxBatch = *in.MaxBatch
 	}
 }
 
-func ListProductIngredients(db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		productID := c.Param("id")
-		var ingredients []models.ProductIngredient
-		if err := db.Preload("Ingredient").Where("product_id = ?", productID).Find(&ingredients).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, ingredients)
+// ─── Recetas (Q / T / CM) ───────────────────────────────────────────────────────
+
+// productDraftGuard valida escenario draft + que el producto exista en él.
+func productDraftGuard(db *gorm.DB, c *gin.Context) (*models.Scenario, bool) {
+	s, ok := getScenario(db, c)
+	if !ok {
+		return nil, false
 	}
+	if !requireDraft(c, s) {
+		return nil, false
+	}
+	var cnt int64
+	db.Model(&models.Product{}).Where("scenario_id = ? AND id = ?", s.ID, c.Param("product_id")).Count(&cnt)
+	if cnt == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Producto no encontrado"})
+		return nil, false
+	}
+	return s, true
 }
 
-func UpdateProductIngredient(db *gorm.DB) gin.HandlerFunc {
+func UpsertProductIngredient(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		productID := c.Param("id")
-		ingredientID := c.Param("ing_id")
-		var input struct {
-			Quantity float64 `json:"quantity"`
+		s, ok := productDraftGuard(db, c)
+		if !ok {
+			return
 		}
-		if err := c.ShouldBindJSON(&input); err != nil {
+		var in struct {
+			Quantity float64 `json:"quantity"` // Q — 0 válido
+		}
+		if err := c.ShouldBindJSON(&in); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		if err := db.Model(&models.ProductIngredient{}).Where("product_id = ? AND ingredient_id = ?", productID, ingredientID).Update("quantity", input.Quantity).Error; err != nil {
+		row := models.ProductIngredient{}
+		err := db.Where("product_id = ? AND ingredient_id = ?", c.Param("product_id"), c.Param("ingredient_id")).First(&row).Error
+		if err == gorm.ErrRecordNotFound {
+			row = models.ProductIngredient{ScenarioID: s.ID, ProductID: parseUint(c.Param("product_id")), IngredientID: parseUint(c.Param("ingredient_id")), Quantity: in.Quantity}
+			err = db.Create(&row).Error
+		} else if err == nil {
+			row.Quantity = in.Quantity
+			err = db.Save(&row).Error
+		}
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"message": "Cantidad actualizada"})
+		c.JSON(http.StatusOK, row)
 	}
 }
 
 func RemoveProductIngredient(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		productID := c.Param("id")
-		ingredientID := c.Param("ing_id")
-		if err := db.Where("product_id = ? AND ingredient_id = ?", productID, ingredientID).Delete(&models.ProductIngredient{}).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if _, ok := productDraftGuard(db, c); !ok {
 			return
 		}
+		db.Where("product_id = ? AND ingredient_id = ?", c.Param("product_id"), c.Param("ingredient_id")).Delete(&models.ProductIngredient{})
 		c.JSON(http.StatusNoContent, nil)
 	}
 }
 
-// ─── PRODUCT MACHINES ────────────────────────────────────────────────────────
-
-func AddProductMachine(db *gorm.DB) gin.HandlerFunc {
+func UpsertProductMachine(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		productID := c.Param("id")
-		var input struct {
-			MachineID      uint    `json:"machine_id" binding:"required"`
-			MinutesPerUnit float64 `json:"minutes_per_unit"`
+		s, ok := productDraftGuard(db, c)
+		if !ok {
+			return
 		}
-		if err := c.ShouldBindJSON(&input); err != nil {
+		var in struct {
+			MinutesPerUnit float64 `json:"minutes_per_unit"` // T
+		}
+		if err := c.ShouldBindJSON(&in); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		
-		var pID uint
-		if err := db.Model(&models.Product{}).Select("id").First(&pID, productID).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Producto no encontrado"})
-			return
+		row := models.ProductMachine{}
+		err := db.Where("product_id = ? AND machine_id = ?", c.Param("product_id"), c.Param("machine_id")).First(&row).Error
+		if err == gorm.ErrRecordNotFound {
+			row = models.ProductMachine{ScenarioID: s.ID, ProductID: parseUint(c.Param("product_id")), MachineID: parseUint(c.Param("machine_id")), MinutesPerUnit: in.MinutesPerUnit}
+			err = db.Create(&row).Error
+		} else if err == nil {
+			row.MinutesPerUnit = in.MinutesPerUnit
+			err = db.Save(&row).Error
 		}
-
-		pm := models.ProductMachine{
-			ProductID:      pID,
-			MachineID:      input.MachineID,
-			MinutesPerUnit: input.MinutesPerUnit,
-		}
-		if err := db.Create(&pm).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al asignar máquina"})
-			return
-		}
-		c.JSON(http.StatusCreated, pm)
-	}
-}
-
-func ListProductMachines(db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		productID := c.Param("id")
-		var machines []models.ProductMachine
-		if err := db.Preload("Machine").Where("product_id = ?", productID).Find(&machines).Error; err != nil {
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, machines)
-	}
-}
-
-func UpdateProductMachine(db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		productID := c.Param("id")
-		machineID := c.Param("machine_id")
-		var input struct {
-			MinutesPerUnit float64 `json:"minutes_per_unit"`
-		}
-		if err := c.ShouldBindJSON(&input); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		if err := db.Model(&models.ProductMachine{}).Where("product_id = ? AND machine_id = ?", productID, machineID).Update("minutes_per_unit", input.MinutesPerUnit).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"message": "Tiempo actualizado"})
+		c.JSON(http.StatusOK, row)
 	}
 }
 
 func RemoveProductMachine(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		productID := c.Param("id")
-		machineID := c.Param("machine_id")
-		if err := db.Where("product_id = ? AND machine_id = ?", productID, machineID).Delete(&models.ProductMachine{}).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if _, ok := productDraftGuard(db, c); !ok {
 			return
 		}
+		db.Where("product_id = ? AND machine_id = ?", c.Param("product_id"), c.Param("machine_id")).Delete(&models.ProductMachine{})
 		c.JSON(http.StatusNoContent, nil)
 	}
 }
 
-// ─── PRODUCT OPERATIONAL RESOURCES ───────────────────────────────────────────
-
-func AddProductOperationalResource(db *gorm.DB) gin.HandlerFunc {
+func UpsertProductOperationalResource(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		productID := c.Param("id")
-		var input struct {
-			OperationalResourceID uint    `json:"operational_resource_id" binding:"required"`
-			ConsumptionPerBatch   float64 `json:"consumption_per_batch"`
+		s, ok := productDraftGuard(db, c)
+		if !ok {
+			return
 		}
-		if err := c.ShouldBindJSON(&input); err != nil {
+		var in struct {
+			ConsumptionPerBatch float64 `json:"consumption_per_batch"` // CM
+		}
+		if err := c.ShouldBindJSON(&in); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		
-		var pID uint
-		if err := db.Model(&models.Product{}).Select("id").First(&pID, productID).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Producto no encontrado"})
-			return
+		row := models.ProductOperationalResource{}
+		err := db.Where("product_id = ? AND operational_resource_id = ?", c.Param("product_id"), c.Param("opres_id")).First(&row).Error
+		if err == gorm.ErrRecordNotFound {
+			row = models.ProductOperationalResource{ScenarioID: s.ID, ProductID: parseUint(c.Param("product_id")), OperationalResourceID: parseUint(c.Param("opres_id")), ConsumptionPerBatch: in.ConsumptionPerBatch}
+			err = db.Create(&row).Error
+		} else if err == nil {
+			row.ConsumptionPerBatch = in.ConsumptionPerBatch
+			err = db.Save(&row).Error
 		}
-
-		por := models.ProductOperationalResource{
-			ProductID:             pID,
-			OperationalResourceID: input.OperationalResourceID,
-			ConsumptionPerBatch:   input.ConsumptionPerBatch,
-		}
-		if err := db.Create(&por).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al asignar recurso operativo"})
-			return
-		}
-		c.JSON(http.StatusCreated, por)
-	}
-}
-
-func ListProductOperationalResources(db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		productID := c.Param("id")
-		var resources []models.ProductOperationalResource
-		if err := db.Preload("OperationalResource").Where("product_id = ?", productID).Find(&resources).Error; err != nil {
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, resources)
-	}
-}
-
-func UpdateProductOperationalResource(db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		productID := c.Param("id")
-		opresID := c.Param("opres_id")
-		var input struct {
-			ConsumptionPerBatch float64 `json:"consumption_per_batch"`
-		}
-		if err := c.ShouldBindJSON(&input); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		if err := db.Model(&models.ProductOperationalResource{}).Where("product_id = ? AND operational_resource_id = ?", productID, opresID).Update("consumption_per_batch", input.ConsumptionPerBatch).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"message": "Consumo actualizado"})
+		c.JSON(http.StatusOK, row)
 	}
 }
 
 func RemoveProductOperationalResource(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		productID := c.Param("id")
-		opresID := c.Param("opres_id")
-		if err := db.Where("product_id = ? AND operational_resource_id = ?", productID, opresID).Delete(&models.ProductOperationalResource{}).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if _, ok := productDraftGuard(db, c); !ok {
 			return
 		}
+		db.Where("product_id = ? AND operational_resource_id = ?", c.Param("product_id"), c.Param("opres_id")).Delete(&models.ProductOperationalResource{})
 		c.JSON(http.StatusNoContent, nil)
 	}
 }
-
-

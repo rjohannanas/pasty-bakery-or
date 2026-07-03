@@ -2,12 +2,10 @@ package solver
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -41,102 +39,52 @@ func floatSliceToString(slice []float64) string {
 	return strings.Join(lines, "\n    ")
 }
 
-// BuildModel genera el contenido del modelo LINGO (.lng) basado en la DB.
-// BuildSnapshot arma una foto congelada (JSON) de los datos de entrada que usa
-// BuildModel: parámetros, stock+ingredientes, resource+máquinas+op.resources y
-// productos con sus matrices. Se guarda en Optimization.InputSnapshot para poder
-// reproducir/comparar una corrida aunque después se editen los singleton
-// Stock/Resource (que se mutan in-place). Recarga con los mismos Preload que
-// BuildModel para reflejar exactamente lo que se optimizó.
-func BuildSnapshot(db *gorm.DB, opt *models.Optimization) (json.RawMessage, error) {
-	var stock models.Stock
-	if err := db.Preload("Ingredients.Ingredient").First(&stock, opt.StockID).Error; err != nil {
-		return nil, fmt.Errorf("snapshot: error cargando stock: %w", err)
-	}
-
-	var resource models.Resource
-	if err := db.Preload("Machines.Machine").Preload("OperationalResources").First(&resource, opt.ResourceID).Error; err != nil {
-		return nil, fmt.Errorf("snapshot: error cargando recursos: %w", err)
-	}
-
-	var products []models.Product
-	if err := db.Preload("Ingredients.Ingredient").Preload("Machines.Machine").Preload("OperationalResources.OperationalResource").Order("id").Find(&products).Error; err != nil {
-		return nil, fmt.Errorf("snapshot: error cargando productos: %w", err)
-	}
-
-	snap := map[string]interface{}{
-		"captured_at": time.Now(),
-		"params": map[string]interface{}{
-			"max_production": opt.MaxProduction,
-			"min_variety":    opt.MinVariety,
-		},
-		"stock":    stock,
-		"resource": resource,
-		"products": products,
-	}
-
-	raw, err := json.Marshal(snap)
-	if err != nil {
-		return nil, fmt.Errorf("snapshot: error serializando: %w", err)
-	}
-	return raw, nil
-}
-
+// BuildModel genera el contenido del modelo LINGO (.lng) a partir del escenario
+// congelado de la optimización. Toda la entrada (productos, insumos con su stock,
+// máquinas con sus horas, recursos operativos) vive dentro del escenario.
 func BuildModel(db *gorm.DB, opt *models.Optimization) (string, []models.Product, error) {
-	var stock models.Stock
-	if err := db.Preload("Ingredients.Ingredient").First(&stock, opt.StockID).Error; err != nil {
-		return "", nil, fmt.Errorf("error cargando stock: %w", err)
+	if opt.ScenarioID == nil {
+		return "", nil, fmt.Errorf("la optimización no tiene escenario asociado")
 	}
-
-	var resource models.Resource
-	if err := db.Preload("Machines.Machine").Preload("OperationalResources").First(&resource, opt.ResourceID).Error; err != nil {
-		return "", nil, fmt.Errorf("error cargando recursos: %w", err)
-	}
+	scenarioID := *opt.ScenarioID
 
 	var products []models.Product
-	if err := db.Preload("Ingredients.Ingredient").Preload("Machines.Machine").Preload("OperationalResources.OperationalResource").Order("id").Find(&products).Error; err != nil {
+	if err := db.Preload("Ingredients.Ingredient").Preload("Machines").Preload("OperationalResources.OperationalResource").
+		Where("scenario_id = ?", scenarioID).Order("id").Find(&products).Error; err != nil {
 		return "", nil, fmt.Errorf("error cargando productos: %w", err)
 	}
-
 	if len(products) == 0 {
 		return "", nil, fmt.Errorf("no hay productos configurados")
 	}
 
 	var ingredients []models.Ingredient
-	if err := db.Order("id").Find(&ingredients).Error; err != nil {
+	if err := db.Where("scenario_id = ?", scenarioID).Order("id").Find(&ingredients).Error; err != nil {
 		return "", nil, fmt.Errorf("error cargando ingredientes: %w", err)
 	}
 
 	var machines []models.Machine
-	if err := db.Order("id").Find(&machines).Error; err != nil {
+	if err := db.Where("scenario_id = ?", scenarioID).Order("id").Find(&machines).Error; err != nil {
 		return "", nil, fmt.Errorf("error cargando máquinas: %w", err)
 	}
 
-	opResources := resource.OperationalResources
-	sort.Slice(opResources, func(i, j int) bool {
-		return opResources[i].ID < opResources[j].ID
-	})
+	var opResources []models.OperationalResource
+	if err := db.Where("scenario_id = ?", scenarioID).Order("id").Find(&opResources).Error; err != nil {
+		return "", nil, fmt.Errorf("error cargando recursos operativos: %w", err)
+	}
 
 	N := len(products)
 	M := len(ingredients)
 	K := len(machines)
 	R := len(opResources)
 
-	prodIDToIndex := make(map[uint]int)
-	for i, p := range products {
-		prodIDToIndex[p.ID] = i + 1
-	}
-
 	ingIDToIndex := make(map[uint]int)
 	for j, ing := range ingredients {
 		ingIDToIndex[ing.ID] = j + 1
 	}
-
 	machIDToIndex := make(map[uint]int)
 	for k, m := range machines {
 		machIDToIndex[m.ID] = k + 1
 	}
-
 	opResIDToIndex := make(map[uint]int)
 	for r, opr := range opResources {
 		opResIDToIndex[opr.ID] = r + 1
@@ -146,7 +94,6 @@ func BuildModel(db *gorm.DB, opt *models.Optimization) (string, []models.Product
 	dValues := make([]float64, N)
 	liValues := make([]float64, N)
 	lsValues := make([]float64, N)
-
 	for i, p := range products {
 		pValues[i] = p.SalePrice
 		dValues[i] = p.Demand
@@ -155,22 +102,15 @@ func BuildModel(db *gorm.DB, opt *models.Optimization) (string, []models.Product
 	}
 
 	cuValues := make([]float64, M)
+	inValues := make([]float64, M)
 	for j, ing := range ingredients {
 		cuValues[j] = ing.UnitCost
-	}
-
-	inValues := make([]float64, M)
-	for _, si := range stock.Ingredients {
-		if idx, ok := ingIDToIndex[si.IngredientID]; ok {
-			inValues[idx-1] = si.QuantityAvailable
-		}
+		inValues[j] = ing.StockAvailable // IN
 	}
 
 	capValues := make([]float64, K)
-	for _, rm := range resource.Machines {
-		if idx, ok := machIDToIndex[rm.MachineID]; ok {
-			capValues[idx-1] = rm.HoursAvailable * 60.0
-		}
+	for k, m := range machines {
+		capValues[k] = m.HoursAvailable * 60.0 // CAP en minutos
 	}
 
 	dispValues := make([]float64, R)

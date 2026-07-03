@@ -29,20 +29,17 @@ func Connect(dsn string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("no se pudo conectar a PostgreSQL tras 5 intentos: %w", err)
 	}
 
-	// AutoMigrate en orden correcto (tablas referenciadas primero)
+	// Orden: escenario (contenedor) → dominio → recetas → corrida.
+	// GORM crea las FKs con las acciones OnDelete de los tags del modelo.
 	err = db.AutoMigrate(
-		&models.Business{},
+		&models.Scenario{},
 		&models.Product{},
 		&models.Ingredient{},
-		&models.ProductIngredient{},
 		&models.Machine{},
-		&models.ProductMachine{},
 		&models.OperationalResource{},
+		&models.ProductIngredient{},
+		&models.ProductMachine{},
 		&models.ProductOperationalResource{},
-		&models.Stock{},
-		&models.StockIngredient{},
-		&models.Resource{},
-		&models.ResourceMachine{},
 		&models.Optimization{},
 		&models.OptimizationResult{},
 		&models.LingoLog{},
@@ -51,32 +48,36 @@ func Connect(dsn string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("error en AutoMigrate: %w", err)
 	}
 
-	// AutoMigrate no altera constraints ya existentes. Forzamos ON DELETE CASCADE
-	// en las FKs de la receta propia del producto (product_ingredients/machines/
-	// operational_resources → products) para que borrar un producto se lleve su
-	// receta (filas sin sentido sin el producto). Idempotente. Las FKs hacia
-	// ingredients/machines siguen RESTRICT a propósito (son datos compartidos).
-	if err := ensureProductRecipeCascade(db); err != nil {
-		return nil, fmt.Errorf("error asegurando cascada de receta: %w", err)
+	// Deriva los invariantes de dominio (docs/03-invariants.md) a CHECK constraints:
+	// el motor rechaza un estado ilegal aunque el código lo deje pasar.
+	if err := ensureDomainChecks(db); err != nil {
+		return nil, fmt.Errorf("error asegurando CHECK constraints: %w", err)
 	}
 
 	return db, nil
 }
 
-// ensureProductRecipeCascade recrea las FKs de las tablas de receta hacia products
-// con ON DELETE CASCADE. Idempotente: DROP IF EXISTS + ADD.
-func ensureProductRecipeCascade(db *gorm.DB) error {
-	stmts := []string{
-		`ALTER TABLE product_ingredients DROP CONSTRAINT IF EXISTS fk_products_ingredients,
-		 ADD CONSTRAINT fk_products_ingredients FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE`,
-		`ALTER TABLE product_machines DROP CONSTRAINT IF EXISTS fk_products_machines,
-		 ADD CONSTRAINT fk_products_machines FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE`,
-		`ALTER TABLE product_operational_resources DROP CONSTRAINT IF EXISTS fk_products_operational_resources,
-		 ADD CONSTRAINT fk_products_operational_resources FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE`,
+// ensureDomainChecks agrega los CHECK de dominio. Idempotente (DROP IF EXISTS + ADD).
+func ensureDomainChecks(db *gorm.DB) error {
+	type chk struct{ table, name, expr string }
+	checks := []chk{
+		{"products", "ck_products_nonneg", "sale_price >= 0 AND demand >= 0 AND min_batch >= 0 AND max_batch >= 0"},
+		{"products", "ck_products_batch", "max_batch >= min_batch"}, // invariante M1
+		{"ingredients", "ck_ingredients_nonneg", "unit_cost >= 0 AND stock_available >= 0"},
+		{"machines", "ck_machines_nonneg", "hours_available >= 0"},
+		{"operational_resources", "ck_opres_nonneg", "available >= 0 AND cost_per_unit >= 0"},
+		{"product_ingredients", "ck_pi_nonneg", "quantity >= 0"},
+		{"product_machines", "ck_pm_nonneg", "minutes_per_unit >= 0"},
+		{"product_operational_resources", "ck_po_nonneg", "consumption_per_batch >= 0"},
+		{"optimization_results", "ck_or_domain", "quantity_to_produce >= 0 AND batch_active IN (0,1) AND variety_flag IN (0,1)"},
 	}
-	for _, s := range stmts {
-		if err := db.Exec(s).Error; err != nil {
-			return err
+	for _, c := range checks {
+		stmt := fmt.Sprintf(
+			"ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s, ADD CONSTRAINT %s CHECK (%s)",
+			c.table, c.name, c.name, c.expr,
+		)
+		if err := db.Exec(stmt).Error; err != nil {
+			return fmt.Errorf("%s: %w", c.name, err)
 		}
 	}
 	return nil

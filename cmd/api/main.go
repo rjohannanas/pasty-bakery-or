@@ -106,67 +106,51 @@ func main() {
 		api.Use(middleware.APIKeyAuth(apiKey))
 	}
 	{
-		// Productos
-		api.GET("/products", handlers.ListProducts(pg))
-		api.GET("/products/:id", handlers.GetProduct(pg))
-		api.POST("/products", handlers.CreateProduct(pg))
-		api.PUT("/products/:id", handlers.UpdateProduct(pg))
-		api.DELETE("/products/:id", handlers.DeleteProduct(pg))
-		
-		api.GET("/products/:id/ingredients", handlers.ListProductIngredients(pg))
-		api.POST("/products/:id/ingredients", handlers.AddProductIngredient(pg))
-		api.PUT("/products/:id/ingredients/:ing_id", handlers.UpdateProductIngredient(pg))
-		api.DELETE("/products/:id/ingredients/:ing_id", handlers.RemoveProductIngredient(pg))
-		
-		api.GET("/products/:id/machines", handlers.ListProductMachines(pg))
-		api.POST("/products/:id/machines", handlers.AddProductMachine(pg))
-		api.PUT("/products/:id/machines/:machine_id", handlers.UpdateProductMachine(pg))
-		api.DELETE("/products/:id/machines/:machine_id", handlers.RemoveProductMachine(pg))
+		// Escenarios (contenedor / unidad de what-if)
+		api.GET("/scenarios", handlers.ListScenarios(pg))
+		api.POST("/scenarios", handlers.CreateScenario(pg))
+		api.GET("/scenarios/:scenario_id", handlers.GetScenario(pg))
+		api.PATCH("/scenarios/:scenario_id", handlers.UpdateScenario(pg))
+		api.DELETE("/scenarios/:scenario_id", handlers.DeleteScenario(pg))
+		api.POST("/scenarios/:scenario_id/clone", handlers.CloneScenario(pg))
+		api.POST("/scenarios/:scenario_id/optimize", handlers.OptimizeScenario(pg, rdb))
 
-		api.GET("/products/:id/operational-resources", handlers.ListProductOperationalResources(pg))
-		api.POST("/products/:id/operational-resources", handlers.AddProductOperationalResource(pg))
-		api.PUT("/products/:id/operational-resources/:opres_id", handlers.UpdateProductOperationalResource(pg))
-		api.DELETE("/products/:id/operational-resources/:opres_id", handlers.RemoveProductOperationalResource(pg))
+		// Productos del escenario + recetas (Q/T/CM)
+		api.GET("/scenarios/:scenario_id/products", handlers.ListProducts(pg))
+		api.POST("/scenarios/:scenario_id/products", handlers.CreateProduct(pg))
+		api.GET("/scenarios/:scenario_id/products/:product_id", handlers.GetProduct(pg))
+		api.PATCH("/scenarios/:scenario_id/products/:product_id", handlers.UpdateProduct(pg))
+		api.DELETE("/scenarios/:scenario_id/products/:product_id", handlers.DeleteProduct(pg))
+		api.PUT("/scenarios/:scenario_id/products/:product_id/ingredients/:ingredient_id", handlers.UpsertProductIngredient(pg))
+		api.DELETE("/scenarios/:scenario_id/products/:product_id/ingredients/:ingredient_id", handlers.RemoveProductIngredient(pg))
+		api.PUT("/scenarios/:scenario_id/products/:product_id/machines/:machine_id", handlers.UpsertProductMachine(pg))
+		api.DELETE("/scenarios/:scenario_id/products/:product_id/machines/:machine_id", handlers.RemoveProductMachine(pg))
+		api.PUT("/scenarios/:scenario_id/products/:product_id/operational-resources/:opres_id", handlers.UpsertProductOperationalResource(pg))
+		api.DELETE("/scenarios/:scenario_id/products/:product_id/operational-resources/:opres_id", handlers.RemoveProductOperationalResource(pg))
 
-		// Ingredientes
-		api.GET("/ingredients", handlers.ListIngredients(pg))
-		api.GET("/ingredients/:id", handlers.GetIngredient(pg))
-		api.POST("/ingredients", handlers.CreateIngredient(pg))
-		api.PUT("/ingredients/:id", handlers.UpdateIngredient(pg))
-		api.DELETE("/ingredients/:id", handlers.DeleteIngredient(pg))
+		// Insumos del escenario
+		api.GET("/scenarios/:scenario_id/ingredients", handlers.ListIngredients(pg))
+		api.POST("/scenarios/:scenario_id/ingredients", handlers.CreateIngredient(pg))
+		api.GET("/scenarios/:scenario_id/ingredients/:ingredient_id", handlers.GetIngredient(pg))
+		api.PATCH("/scenarios/:scenario_id/ingredients/:ingredient_id", handlers.UpdateIngredient(pg))
+		api.DELETE("/scenarios/:scenario_id/ingredients/:ingredient_id", handlers.DeleteIngredient(pg))
 
-		// Máquinas
-		api.GET("/machines", handlers.ListMachines(pg))
-		api.GET("/machines/:id", handlers.GetMachine(pg))
-		api.POST("/machines", handlers.CreateMachine(pg))
-		api.PUT("/machines/:id", handlers.UpdateMachine(pg))
-		api.DELETE("/machines/:id", handlers.DeleteMachine(pg))
+		// Máquinas del escenario
+		api.GET("/scenarios/:scenario_id/machines", handlers.ListMachines(pg))
+		api.POST("/scenarios/:scenario_id/machines", handlers.CreateMachine(pg))
+		api.GET("/scenarios/:scenario_id/machines/:machine_id", handlers.GetMachine(pg))
+		api.PATCH("/scenarios/:scenario_id/machines/:machine_id", handlers.UpdateMachine(pg))
+		api.DELETE("/scenarios/:scenario_id/machines/:machine_id", handlers.DeleteMachine(pg))
 
-		// Stocks
-		api.GET("/stocks/default", handlers.GetDefaultStock(pg))
-		api.GET("/stocks", handlers.ListStocks(pg))
-		api.GET("/stocks/:id", handlers.GetStock(pg))
-		api.POST("/stocks", handlers.CreateStock(pg))
-		api.PUT("/stocks/:id", handlers.UpdateStock(pg))
-		api.DELETE("/stocks/:id", handlers.DeleteStock(pg))
-		api.PUT("/stocks/:id/ingredients/:ingredient_id", handlers.UpsertStockIngredient(pg))
-		api.DELETE("/stocks/:id/ingredients/:ingredient_id", handlers.RemoveStockIngredient(pg))
+		// Recursos operativos del escenario
+		api.GET("/scenarios/:scenario_id/operational-resources", handlers.ListOperationalResources(pg))
+		api.POST("/scenarios/:scenario_id/operational-resources", handlers.CreateOperationalResource(pg))
+		api.GET("/scenarios/:scenario_id/operational-resources/:opres_id", handlers.GetOperationalResource(pg))
+		api.PATCH("/scenarios/:scenario_id/operational-resources/:opres_id", handlers.UpdateOperationalResource(pg))
+		api.DELETE("/scenarios/:scenario_id/operational-resources/:opres_id", handlers.DeleteOperationalResource(pg))
 
-		// Recursos
-		api.GET("/resources/default", handlers.GetDefaultResource(pg))
-		api.GET("/resources", handlers.ListResources(pg))
-		api.GET("/resources/:id", handlers.GetResource(pg))
-		api.POST("/resources", handlers.CreateResource(pg))
-		api.DELETE("/resources/:id", handlers.DeleteResource(pg))
-		api.PUT("/resources/:id/machines/:machine_id", handlers.UpsertResourceMachine(pg))
-		api.DELETE("/resources/:id/machines/:machine_id", handlers.RemoveResourceMachine(pg))
-		api.POST("/resources/:id/operational-resources", handlers.AddResourceOperationalResource(pg))
-		api.PUT("/resources/:id/operational-resources/:opres_id", handlers.UpdateResourceOperationalResource(pg))
-		api.DELETE("/resources/:id/operational-resources/:opres_id", handlers.DeleteResourceOperationalResource(pg))
-
-		// Optimización
-		api.POST("/optimize", handlers.Optimize(pg, rdb))
-		api.GET("/optimize/:job_id", handlers.GetJobStatus(pg, rdb))
+		// Corridas
+		api.GET("/optimizations/:job_id", handlers.GetJobStatus(pg, rdb))
 		api.GET("/optimize/queue/status", handlers.GetQueueStatus(rdb))
 		api.GET("/results", handlers.ListOptimizations(pg))
 		api.GET("/results/:id", handlers.GetOptimizationResult(pg))
