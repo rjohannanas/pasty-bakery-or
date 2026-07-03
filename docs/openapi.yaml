@@ -202,13 +202,62 @@ paths:
         "200": { description: OK }
     delete:
       tags: [Recipes]
-      summary: Quita la celda de receta
+      summary: Quita la celda de receta Q(I,J)
       responses:
         "204": { description: Borrado }
 
-  # Ingredients / Machines / OperationalResources siguen el MISMO patrón que
-  # Products: GET/POST en /scenarios/{id}/<recurso>, GET/PATCH/DELETE en
-  # /scenarios/{id}/<recurso>/{sub_id}. Recetas T y CM análogas a Q.
+  /scenarios/{scenario_id}/products/{product_id}/machines/{machine_id}:
+    parameters:
+      - { $ref: "#/components/parameters/ScenarioId" }
+      - { $ref: "#/components/parameters/ProductId" }
+      - { $ref: "#/components/parameters/MachineId" }
+    put:
+      tags: [Recipes]
+      summary: Upsert celda de receta T(I,K)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [minutes_per_unit]
+              properties:
+                minutes_per_unit: { type: number, minimum: 0, description: "T — minutos por unidad; 0 es válido" }
+      responses:
+        "200": { description: OK }
+    delete:
+      tags: [Recipes]
+      summary: Quita la celda de receta T(I,K)
+      responses:
+        "204": { description: Borrado }
+
+  /scenarios/{scenario_id}/products/{product_id}/operational-resources/{opres_id}:
+    parameters:
+      - { $ref: "#/components/parameters/ScenarioId" }
+      - { $ref: "#/components/parameters/ProductId" }
+      - { $ref: "#/components/parameters/OpresId" }
+    put:
+      tags: [Recipes]
+      summary: Upsert celda de receta CM(I,R)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [consumption_per_batch]
+              properties:
+                consumption_per_batch: { type: number, minimum: 0, description: "CM — consumo por lote; 0 es válido" }
+      responses:
+        "200": { description: OK }
+    delete:
+      tags: [Recipes]
+      summary: Quita la celda de receta CM(I,R)
+      responses:
+        "204": { description: Borrado }
+
+  # Ingredients / Machines / OperationalResources comparten el patrón de Products:
+  # colección GET/POST + item GET/PATCH/DELETE.
   /scenarios/{scenario_id}/ingredients:
     parameters: [ { $ref: "#/components/parameters/ScenarioId" } ]
     get:
@@ -224,6 +273,28 @@ paths:
         "201": { content: { application/json: { schema: { $ref: "#/components/schemas/Ingredient" } } }, description: Creado }
         "409": { $ref: "#/components/responses/Conflict" }
 
+  /scenarios/{scenario_id}/ingredients/{ingredient_id}:
+    parameters:
+      - { $ref: "#/components/parameters/ScenarioId" }
+      - { $ref: "#/components/parameters/IngredientId" }
+    get:
+      tags: [Ingredients]
+      summary: Obtiene un insumo del escenario
+      responses:
+        "200": { content: { application/json: { schema: { $ref: "#/components/schemas/Ingredient" } } }, description: OK }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Ingredients]
+      summary: Edita un insumo (solo en draft)
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/IngredientInput" } } } }
+      responses:
+        "200": { content: { application/json: { schema: { $ref: "#/components/schemas/Ingredient" } } }, description: Actualizado }
+    delete:
+      tags: [Ingredients]
+      summary: Borra un insumo (cascadea sus celdas de receta; nunca bloquea)
+      responses:
+        "204": { description: Borrado }
+
   /scenarios/{scenario_id}/machines:
     parameters: [ { $ref: "#/components/parameters/ScenarioId" } ]
     get:
@@ -238,6 +309,28 @@ paths:
       responses:
         "201": { content: { application/json: { schema: { $ref: "#/components/schemas/Machine" } } }, description: Creado }
 
+  /scenarios/{scenario_id}/machines/{machine_id}:
+    parameters:
+      - { $ref: "#/components/parameters/ScenarioId" }
+      - { $ref: "#/components/parameters/MachineId" }
+    get:
+      tags: [Machines]
+      summary: Obtiene una máquina del escenario
+      responses:
+        "200": { content: { application/json: { schema: { $ref: "#/components/schemas/Machine" } } }, description: OK }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Machines]
+      summary: Edita una máquina (solo en draft)
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/MachineInput" } } } }
+      responses:
+        "200": { content: { application/json: { schema: { $ref: "#/components/schemas/Machine" } } }, description: Actualizado }
+    delete:
+      tags: [Machines]
+      summary: Borra una máquina (cascadea sus celdas de receta; nunca bloquea)
+      responses:
+        "204": { description: Borrado }
+
   /scenarios/{scenario_id}/operational-resources:
     parameters: [ { $ref: "#/components/parameters/ScenarioId" } ]
     get:
@@ -251,6 +344,28 @@ paths:
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/OperationalResourceInput" } } } }
       responses:
         "201": { content: { application/json: { schema: { $ref: "#/components/schemas/OperationalResource" } } }, description: Creado }
+
+  /scenarios/{scenario_id}/operational-resources/{opres_id}:
+    parameters:
+      - { $ref: "#/components/parameters/ScenarioId" }
+      - { $ref: "#/components/parameters/OpresId" }
+    get:
+      tags: [OperationalResources]
+      summary: Obtiene un recurso operativo del escenario
+      responses:
+        "200": { content: { application/json: { schema: { $ref: "#/components/schemas/OperationalResource" } } }, description: OK }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [OperationalResources]
+      summary: Edita un recurso operativo (solo en draft)
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/OperationalResourceInput" } } } }
+      responses:
+        "200": { content: { application/json: { schema: { $ref: "#/components/schemas/OperationalResource" } } }, description: Actualizado }
+    delete:
+      tags: [OperationalResources]
+      summary: Borra un recurso operativo (cascadea sus celdas de receta; nunca bloquea)
+      responses:
+        "204": { description: Borrado }
 
   # ─── Corridas ───────────────────────────────────────────────────────────────
   /optimizations/{job_id}:
@@ -325,6 +440,8 @@ components:
     ScenarioId: { name: scenario_id, in: path, required: true, schema: { type: integer } }
     ProductId: { name: product_id, in: path, required: true, schema: { type: integer } }
     IngredientId: { name: ingredient_id, in: path, required: true, schema: { type: integer } }
+    MachineId: { name: machine_id, in: path, required: true, schema: { type: integer } }
+    OpresId: { name: opres_id, in: path, required: true, schema: { type: integer } }
 
   responses:
     BadRequest:
