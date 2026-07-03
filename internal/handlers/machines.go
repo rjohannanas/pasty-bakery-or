@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -94,6 +95,17 @@ func UpdateMachine(db *gorm.DB) gin.HandlerFunc {
 func DeleteMachine(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
+
+		var prods, res int64
+		db.Model(&models.ProductMachine{}).Where("machine_id = ?", id).Count(&prods)
+		db.Model(&models.ResourceMachine{}).Where("machine_id = ?", id).Count(&res)
+		if prods > 0 || res > 0 {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": fmt.Sprintf("No se puede eliminar: la máquina la usan %d producto(s) y %d recurso(s). Quitala de ellos antes de borrarla.", prods, res),
+			})
+			return
+		}
+
 		if err := db.Delete(&models.Machine{}, id).Error; err != nil {
 			c.JSON(http.StatusConflict, gin.H{"error": "No se puede eliminar la máquina porque está siendo usada en productos o recursos"})
 			return

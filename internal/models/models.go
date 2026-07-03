@@ -47,7 +47,7 @@ type ProductIngredient struct {
 	ProductID    uint       `gorm:"not null;uniqueIndex:uq_prod_ing" json:"product_id"`
 	IngredientID uint       `gorm:"not null;uniqueIndex:uq_prod_ing" json:"ingredient_id"`
 	Quantity     float64    `gorm:"not null" json:"quantity"`
-	Product      Product    `gorm:"foreignKey:ProductID;constraint:OnDelete:RESTRICT" json:"-"`
+	Product      Product    `gorm:"foreignKey:ProductID;constraint:OnDelete:CASCADE" json:"-"`
 	Ingredient   Ingredient `gorm:"foreignKey:IngredientID;constraint:OnDelete:RESTRICT" json:"ingredient,omitempty"`
 }
 
@@ -67,7 +67,7 @@ type ProductMachine struct {
 	ProductID      uint    `gorm:"not null;uniqueIndex:uq_prod_mach" json:"product_id"`
 	MachineID      uint    `gorm:"not null;uniqueIndex:uq_prod_mach" json:"machine_id"`
 	MinutesPerUnit float64 `gorm:"not null" json:"minutes_per_unit"`
-	Product        Product `gorm:"foreignKey:ProductID;constraint:OnDelete:RESTRICT" json:"-"`
+	Product        Product `gorm:"foreignKey:ProductID;constraint:OnDelete:CASCADE" json:"-"`
 	Machine        Machine `gorm:"foreignKey:MachineID;constraint:OnDelete:RESTRICT" json:"machine,omitempty"`
 }
 
@@ -89,7 +89,7 @@ type ProductOperationalResource struct {
 	ProductID             uint                `gorm:"not null;uniqueIndex:uq_prod_opres" json:"product_id"`
 	OperationalResourceID uint                `gorm:"not null;uniqueIndex:uq_prod_opres" json:"operational_resource_id"`
 	ConsumptionPerBatch   float64             `gorm:"not null" json:"consumption_per_batch"` // CM(I,R)
-	Product               Product             `gorm:"foreignKey:ProductID;constraint:OnDelete:RESTRICT" json:"-"`
+	Product               Product             `gorm:"foreignKey:ProductID;constraint:OnDelete:CASCADE" json:"-"`
 	OperationalResource   OperationalResource `gorm:"foreignKey:OperationalResourceID;constraint:OnDelete:RESTRICT" json:"operational_resource,omitempty"`
 }
 

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -121,6 +122,18 @@ func UpdateProduct(db *gorm.DB) gin.HandlerFunc {
 func DeleteProduct(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
+
+		// La receta propia (ingredientes/máquinas/op.resources) cascadea al borrar.
+		// Lo único que protege el borrado es el historial de optimizaciones.
+		var results int64
+		db.Model(&models.OptimizationResult{}).Where("product_id = ?", id).Count(&results)
+		if results > 0 {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": fmt.Sprintf("El producto aparece en %d resultado(s) de optimización del historial y no se puede eliminar.", results),
+			})
+			return
+		}
+
 		if err := db.Delete(&models.Product{}, id).Error; err != nil {
 			c.JSON(http.StatusConflict, gin.H{"error": "No se puede eliminar el producto"})
 			return

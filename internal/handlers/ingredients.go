@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -130,6 +131,17 @@ func UpdateIngredient(db *gorm.DB) gin.HandlerFunc {
 func DeleteIngredient(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
+
+		var prods, stk int64
+		db.Model(&models.ProductIngredient{}).Where("ingredient_id = ?", id).Count(&prods)
+		db.Model(&models.StockIngredient{}).Where("ingredient_id = ?", id).Count(&stk)
+		if prods > 0 || stk > 0 {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": fmt.Sprintf("No se puede eliminar: el ingrediente lo usan %d producto(s) y está en %d stock(s). Quitalo de ellos antes de borrarlo.", prods, stk),
+			})
+			return
+		}
+
 		if err := db.Delete(&models.Ingredient{}, id).Error; err != nil {
 			// Si hay FKs (ON DELETE RESTRICT), GORM tirará error aquí
 			c.JSON(http.StatusConflict, gin.H{"error": "No se puede eliminar el ingrediente porque está siendo usado en productos o stocks"})
