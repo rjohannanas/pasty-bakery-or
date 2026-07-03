@@ -24,7 +24,7 @@ verdad: aunque el front no valide, el back + DB deben rechazar el estado ilegal.
 | A2 | `0` es un valor **válido**, no "faltante" | **Ausencia de `binding:"required"`** en floats; `NOT NULL` expresa obligatoriedad | — (era la causa del bug de auto-ligado) |
 | A3 | Nombres no vacíos | CHECK `length(trim(name)) > 0` | DB/handler rechaza (400) |
 | A4 | Nombre único por escenario | UNIQUE `(scenario_id, name)` | DB rechaza (409) |
-| A5 | `batch_active`, `variety_flag` ∈ {0, 1} | CHECK `col IN (0,1)` | DB rechaza |
+| A5 | `variety_flag` ∈ {0,1} (W, `@BIN`); `batch_active` entero ≥0 (Y, `@GIN`, nº de lotes) | CHECK `>= 0` | DB rechaza |
 
 > **A2 es la regla más importante de este documento.** Su ausencia causó el 400
 > del auto-ligado. `binding:"required"` en un `float64` rechaza el cero de Go.

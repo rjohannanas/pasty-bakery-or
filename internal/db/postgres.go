@@ -69,7 +69,8 @@ func ensureDomainChecks(db *gorm.DB) error {
 		{"product_ingredients", "ck_pi_nonneg", "quantity >= 0"},
 		{"product_machines", "ck_pm_nonneg", "minutes_per_unit >= 0"},
 		{"product_operational_resources", "ck_po_nonneg", "consumption_per_batch >= 0"},
-		{"optimization_results", "ck_or_domain", "quantity_to_produce >= 0 AND batch_active IN (0,1) AND variety_flag IN (0,1)"},
+		// Y(I) es @GIN (entero ≥0, nº de lotes), NO binario. Solo W(I) es @BIN.
+		{"optimization_results", "ck_or_domain", "quantity_to_produce >= 0 AND batch_active >= 0 AND variety_flag >= 0"},
 	}
 	for _, c := range checks {
 		stmt := fmt.Sprintf(

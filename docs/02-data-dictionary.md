@@ -177,8 +177,8 @@ resultado histórico se lea aunque el producto se archive.
 | canonical_product_id | *uint | para analítica cruzada | |
 | product_name | string | denormalizado | |
 | quantity_to_produce | float | ≥ 0 | X |
-| batch_active | float | 0 ó 1 | Y |
-| variety_flag | float | 0 ó 1 | W |
+| batch_active | float | ≥0 (entero, nº de lotes) | Y (@GIN) |
+| variety_flag | float | 0 ó 1 | W (@BIN) |
 | expected_profit | float | | |
 
 ### LingoLog

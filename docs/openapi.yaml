@@ -471,6 +471,6 @@ components:
         canonical_product_id: { type: [integer, "null"] }
         product_name: { type: string, description: Denormalizado — resultado autocontenido }
         quantity_to_produce: { type: number, minimum: 0, description: LINGO X }
-        batch_active: { type: number, enum: [0, 1], description: LINGO Y }
-        variety_flag: { type: number, enum: [0, 1], description: LINGO W }
+        batch_active: { type: number, minimum: 0, description: "LINGO Y (@GIN, entero ≥0)" }
+        variety_flag: { type: number, enum: [0, 1], description: "LINGO W (@BIN)" }
         expected_profit: { type: number }
