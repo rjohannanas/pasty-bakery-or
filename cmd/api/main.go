@@ -1,11 +1,8 @@
 package main
 
-// @title LINGO Bakery API
-// @version 1.0
-// @description Backend para la optimización de producción de una panadería usando LINGO.
-// @contact.name Soporte Técnico
-// @host localhost:8080
-// @BasePath /api
+// Backend para la optimización de producción de una panadería usando LINGO.
+// Contrato de API AUTORITATIVO: docs/openapi.yaml (contract-first, servido en
+// GET /openapi.yaml). El código deriva de ese archivo, no al revés.
 
 import (
 	"context"
@@ -27,9 +24,6 @@ import (
 	"lingo-backend/internal/ws"
 
 	"github.com/gin-contrib/cors"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
-	_ "lingo-backend/docs"
 )
 
 func main() {
@@ -86,8 +80,8 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok", "time": time.Now()})
 	})
 
-	// Swagger UI
-	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	// Contrato de API autoritativo (contract-first). Ver docs/openapi.yaml.
+	r.StaticFile("/openapi.yaml", "docs/openapi.yaml")
 
 	apiKey := os.Getenv("APP_API_KEY")
 	if apiKey == "" {

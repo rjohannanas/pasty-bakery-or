@@ -24,9 +24,9 @@ manda y el código se corrige.
 | **Contrato de API** | `docs/openapi.yaml` (**contract-first**) | autoritativo; back y front **derivan** de él |
 | **Físico** | `internal/models/`, migraciones | ejecutable, derivado del lógico + contrato |
 
-> `docs/swagger.*` es la salida **vieja** generada del código singleton anterior
-> (code-first). Queda obsoleta: la reemplaza `openapi.yaml` como fuente. Se
-> elimina al recodear.
+> La salida swaggo vieja (`docs/swagger.*`, code-first del singleton anterior) ya
+> fue **eliminada**. `openapi.yaml` es la única fuente del contrato y se sirve en
+> `GET /openapi.yaml`.
 
 ## Índice
 
@@ -40,10 +40,10 @@ manda y el código se corrige.
 | — | [openapi.yaml](openapi.yaml) | **Contrato de API autoritativo** (OpenAPI 3.1, contract-first) |
 | — | [erd.html](erd.html) | Diagrama visual del esquema (3 capas + ciclo de vida) |
 | — | [adr/](adr/) | Registros de decisión de arquitectura (por qué de cada elección) |
-| — | ~~`swagger.*`~~ | Salida vieja generada (obsoleta, se elimina al recodear) |
 
 ## Estado
 
-Rediseño en curso. El modelo objetivo es **escenarios instanciados + fork +
-identidad archivable** (ver `02-data-dictionary.md`). El código actual (singleton
-Stock/Resource) se reescribe para alinear con estos docs.
+Modelo **escenarios instanciados + fork + identidad archivable** (ver
+`02-data-dictionary.md`) ya implementado en el código. Los invariantes del doc 03
+se derivan a la DB: CHECK de dominio/nombre y FK compuesta same-scenario (M2) en
+`internal/db/postgres.go`.

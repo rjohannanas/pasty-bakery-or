@@ -258,10 +258,37 @@ paths:
       - { name: job_id, in: path, required: true, schema: { type: string } }
     get:
       tags: [Optimization]
-      summary: Estado de un job
+      summary: Estado liviano de un job (para polling; status en vivo desde Redis)
+      description: >
+        Respuesta liviana pensada para polling: el `status` sale de Redis (o de
+        Postgres como fallback). Para la corrida completa con su plan, usar
+        GET /results/{id} con el `id` que devuelve este endpoint.
       responses:
-        "200": { description: Estado, content: { application/json: { schema: { $ref: "#/components/schemas/Optimization" } } } }
+        "200": { description: Estado, content: { application/json: { schema: { $ref: "#/components/schemas/JobStatus" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /optimize/queue/status:
+    get:
+      tags: [Optimization]
+      summary: Estado de la cola de jobs (pendientes / en proceso)
+      responses:
+        "200": { description: Estado de la cola, content: { application/json: { schema: { $ref: "#/components/schemas/QueueStatus" } } } }
+
+  # ─── Logs del solver ──────────────────────────────────────────────────────────
+  /logs/lingo:
+    get:
+      tags: [Optimization]
+      summary: Últimos logs del solver (máx. 50, más recientes primero)
+      responses:
+        "200": { content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/LingoLog" } } } }, description: Lista }
+  /logs/lingo/{job_id}:
+    parameters:
+      - { name: job_id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Optimization]
+      summary: Logs del solver de un job (orden cronológico)
+      responses:
+        "200": { content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/LingoLog" } } } }, description: Lista }
 
   /results:
     get:
@@ -415,19 +442,19 @@ components:
 
     Machine:
       type: object
-      required: [id, scenario_id, name, hours_available]
+      required: [id, scenario_id, name, capacity_minutes]
       properties:
         id: { type: integer }
         scenario_id: { type: integer }
         canonical_id: { type: [integer, "null"] }
         name: { type: string, minLength: 1 }
-        hours_available: { type: number, minimum: 0, description: "LINGO CAP (×60 → min)" }
+        capacity_minutes: { type: number, minimum: 0, description: "LINGO CAP (minutos; misma unidad que ProductMachine.minutes_per_unit)" }
     MachineInput:
       type: object
       required: [name]
       properties:
         name: { type: string, minLength: 1 }
-        hours_available: { type: number, minimum: 0 }
+        capacity_minutes: { type: number, minimum: 0 }
 
     OperationalResource:
       type: object
@@ -474,3 +501,35 @@ components:
         batch_active: { type: number, minimum: 0, description: "LINGO Y (@GIN, entero ≥0)" }
         variety_flag: { type: number, enum: [0, 1], description: "LINGO W (@BIN)" }
         expected_profit: { type: number }
+
+    JobStatus:
+      type: object
+      description: Respuesta liviana de polling de GET /optimizations/{job_id}.
+      required: [job_id, status]
+      properties:
+        job_id: { type: string }
+        status: { $ref: "#/components/schemas/OptimizationStatus" }
+        id: { type: integer, description: "id de la Optimization (para GET /results/{id})" }
+
+    QueueStatus:
+      type: object
+      required: [pending_count, processing_count]
+      properties:
+        pending_count: { type: integer }
+        pending_ids: { type: array, items: { type: string } }
+        processing_count: { type: integer }
+        processing_ids: { type: array, items: { type: string } }
+
+    LingoLog:
+      type: object
+      required: [id, job_id, level, message]
+      properties:
+        id: { type: integer }
+        job_id: { type: string }
+        optimization_id: { type: integer }
+        level: { type: string, enum: [info, error] }
+        message: { type: string }
+        model_generated: { type: string, description: El .lng generado }
+        lingo_output: { type: string, description: Salida cruda del solver }
+        duration_ms: { type: integer }
+        created_at: { type: string, format: date-time }
