@@ -110,7 +110,7 @@ func BuildModel(db *gorm.DB, opt *models.Optimization) (string, []models.Product
 
 	capValues := make([]float64, K)
 	for k, m := range machines {
-		capValues[k] = m.HoursAvailable * 60.0 // CAP en minutos
+		capValues[k] = m.CapacityMinutes // CAP ya en minutos (misma unidad que T)
 	}
 
 	dispValues := make([]float64, R)

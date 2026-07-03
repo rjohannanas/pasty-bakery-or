@@ -101,7 +101,7 @@ parámetros. `canonical_id` apunta a la fila "origen" al forkear; permite
 | scenario_id | uint | FK→Scenario, NOT NULL | |
 | canonical_id | *uint | FK→Machine, nullable | |
 | name | string | no vacío, único por (scenario_id) | |
-| hours_available | float | ≥ 0 | CAP (×60 → min) |
+| capacity_minutes | float | ≥ 0 | CAP (minutos; misma unidad que T) |
 
 ### OperationalResource
 

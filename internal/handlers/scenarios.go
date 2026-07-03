@@ -231,7 +231,7 @@ func CloneScenario(db *gorm.DB) gin.HandlerFunc {
 			for _, m := range machines {
 				nm := models.Machine{
 					ScenarioID: dst.ID, CanonicalID: rootCanonical(m.CanonicalID, m.ID),
-					Name: m.Name, HoursAvailable: m.HoursAvailable,
+					Name: m.Name, CapacityMinutes: m.CapacityMinutes,
 				}
 				if err := tx.Create(&nm).Error; err != nil {
 					return err

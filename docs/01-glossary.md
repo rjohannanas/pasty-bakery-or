@@ -34,7 +34,7 @@ datos **debe** mantener este mapeo (documentado también en los comentarios de
 | Lote máximo | `Product.max_batch` | **LS(I)** | Producción máxima del producto I |
 | Costo unitario insumo | `Ingredient.unit_cost` | **CU(J)** | Costo por unidad del insumo J |
 | Stock disponible | `Ingredient.stock_available` | **IN(J)** | Cantidad disponible del insumo J |
-| Capacidad máquina | `Machine.hours_available` | **CAP(K)** | Horas disponibles máquina K (×60 → minutos) |
+| Capacidad máquina | `Machine.capacity_minutes` | **CAP(K)** | Minutos disponibles máquina K (misma unidad que T) |
 | Disponibilidad rec. op. | `OperationalResource.available` | **DISP(R)** | Tope del recurso operativo R |
 | Costo rec. op. | `OperationalResource.cost_per_unit` | **CR(R)** | Costo por unidad del recurso operativo R |
 | Receta insumo | `ProductIngredient.quantity` | **Q(I,J)** | Insumo J por unidad de producto I |

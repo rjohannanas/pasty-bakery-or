@@ -34,8 +34,8 @@ func GetMachine(db *gorm.DB) gin.HandlerFunc {
 }
 
 type machineInput struct {
-	Name           *string  `json:"name"`
-	HoursAvailable *float64 `json:"hours_available"`
+	Name            *string  `json:"name"`
+	CapacityMinutes *float64 `json:"capacity_minutes"`
 }
 
 func CreateMachine(db *gorm.DB) gin.HandlerFunc {
@@ -54,8 +54,8 @@ func CreateMachine(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		it := models.Machine{ScenarioID: s.ID, Name: *in.Name}
-		if in.HoursAvailable != nil {
-			it.HoursAvailable = *in.HoursAvailable
+		if in.CapacityMinutes != nil {
+			it.CapacityMinutes = *in.CapacityMinutes
 		}
 		if err := db.Create(&it).Error; err != nil {
 			c.JSON(http.StatusConflict, gin.H{"error": "No se pudo crear (¿nombre duplicado en el escenario?)"})
@@ -84,8 +84,8 @@ func UpdateMachine(db *gorm.DB) gin.HandlerFunc {
 		if in.Name != nil {
 			it.Name = *in.Name
 		}
-		if in.HoursAvailable != nil {
-			it.HoursAvailable = *in.HoursAvailable
+		if in.CapacityMinutes != nil {
+			it.CapacityMinutes = *in.CapacityMinutes
 		}
 		if err := db.Save(&it).Error; err != nil {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})

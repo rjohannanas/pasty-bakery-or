@@ -24,7 +24,7 @@ type Scenario struct {
 	Notes         string         `json:"notes,omitempty"`
 	Status        ScenarioStatus `gorm:"type:varchar(20);not null;default:'draft'" json:"status"`
 	IsBase        bool           `gorm:"not null;default:false" json:"is_base"`
-	ParentID      *uint          `json:"parent_id,omitempty"` // forkeado de
+	ParentID      *uint          `json:"parent_id,omitempty"`                        // forkeado de
 	MaxProduction float64        `gorm:"not null;default:200" json:"max_production"` // M
 	MinVariety    int            `gorm:"not null;default:7" json:"min_variety"`      // PRO
 
@@ -43,9 +43,9 @@ type Scenario struct {
 
 // Product — LINGO: P (sale_price), D (demand), LI (min_batch), LS (max_batch).
 type Product struct {
-	ID          uint  `gorm:"primaryKey" json:"id"`
-	ScenarioID  uint  `gorm:"not null;index;uniqueIndex:uq_scen_prod" json:"scenario_id"`
-	CanonicalID *uint `gorm:"index" json:"canonical_id,omitempty"` // identidad cruzada
+	ID          uint    `gorm:"primaryKey" json:"id"`
+	ScenarioID  uint    `gorm:"not null;index;uniqueIndex:uq_scen_prod" json:"scenario_id"`
+	CanonicalID *uint   `gorm:"index" json:"canonical_id,omitempty"` // identidad cruzada
 	Name        string  `gorm:"not null;uniqueIndex:uq_scen_prod" json:"name"`
 	SalePrice   float64 `gorm:"not null;default:0" json:"sale_price"` // P
 	Demand      float64 `gorm:"not null;default:0" json:"demand"`     // D
@@ -64,9 +64,9 @@ type Product struct {
 
 // Ingredient — LINGO: CU (unit_cost), IN (stock_available). Absorbe StockIngredient.
 type Ingredient struct {
-	ID             uint  `gorm:"primaryKey" json:"id"`
-	ScenarioID     uint  `gorm:"not null;index;uniqueIndex:uq_scen_ing" json:"scenario_id"`
-	CanonicalID    *uint `gorm:"index" json:"canonical_id,omitempty"`
+	ID             uint        `gorm:"primaryKey" json:"id"`
+	ScenarioID     uint        `gorm:"not null;index;uniqueIndex:uq_scen_ing" json:"scenario_id"`
+	CanonicalID    *uint       `gorm:"index" json:"canonical_id,omitempty"`
 	Name           string      `gorm:"not null;uniqueIndex:uq_scen_ing" json:"name"`
 	Unit           string      `gorm:"not null" json:"unit"`
 	UnitCost       float64     `gorm:"not null;default:0" json:"unit_cost"`       // CU
@@ -77,24 +77,25 @@ type Ingredient struct {
 	UpdatedAt      time.Time   `json:"updated_at"`
 }
 
-// Machine — LINGO: CAP (hours_available, ×60 → min). Absorbe ResourceMachine.
+// Machine — LINGO: CAP (capacity_minutes; misma unidad que T, sin conversión).
+// Absorbe ResourceMachine.
 type Machine struct {
-	ID             uint  `gorm:"primaryKey" json:"id"`
-	ScenarioID     uint  `gorm:"not null;index;uniqueIndex:uq_scen_mach" json:"scenario_id"`
-	CanonicalID    *uint `gorm:"index" json:"canonical_id,omitempty"`
-	Name           string    `gorm:"not null;uniqueIndex:uq_scen_mach" json:"name"`
-	HoursAvailable float64   `gorm:"not null;default:0" json:"hours_available"` // CAP
-	Scenario       Scenario  `gorm:"foreignKey:ScenarioID;constraint:OnDelete:CASCADE" json:"-"`
-	Canonical      *Machine  `gorm:"foreignKey:CanonicalID;constraint:OnDelete:SET NULL" json:"-"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID              uint      `gorm:"primaryKey" json:"id"`
+	ScenarioID      uint      `gorm:"not null;index;uniqueIndex:uq_scen_mach" json:"scenario_id"`
+	CanonicalID     *uint     `gorm:"index" json:"canonical_id,omitempty"`
+	Name            string    `gorm:"not null;uniqueIndex:uq_scen_mach" json:"name"`
+	CapacityMinutes float64   `gorm:"not null;default:0" json:"capacity_minutes"` // CAP (minutos)
+	Scenario        Scenario  `gorm:"foreignKey:ScenarioID;constraint:OnDelete:CASCADE" json:"-"`
+	Canonical       *Machine  `gorm:"foreignKey:CanonicalID;constraint:OnDelete:SET NULL" json:"-"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // OperationalResource — LINGO: DISP (available), CR (cost_per_unit).
 type OperationalResource struct {
-	ID          uint  `gorm:"primaryKey" json:"id"`
-	ScenarioID  uint  `gorm:"not null;index;uniqueIndex:uq_scen_opres" json:"scenario_id"`
-	CanonicalID *uint `gorm:"index" json:"canonical_id,omitempty"`
+	ID          uint                 `gorm:"primaryKey" json:"id"`
+	ScenarioID  uint                 `gorm:"not null;index;uniqueIndex:uq_scen_opres" json:"scenario_id"`
+	CanonicalID *uint                `gorm:"index" json:"canonical_id,omitempty"`
 	Name        string               `gorm:"not null;uniqueIndex:uq_scen_opres" json:"name"`
 	Available   float64              `gorm:"not null;default:0" json:"available"`     // DISP
 	CostPerUnit float64              `gorm:"not null;default:0" json:"cost_per_unit"` // CR
@@ -164,25 +165,25 @@ type Optimization struct {
 	MinVariety    int                `gorm:"not null;default:7" json:"min_variety"`      // PRO efectivo
 	TotalProfit   float64            `json:"total_profit"`
 
-	Scenario  *Scenario            `gorm:"foreignKey:ScenarioID;constraint:OnDelete:SET NULL" json:"scenario,omitempty"`
-	Results   []OptimizationResult `gorm:"foreignKey:OptimizationID" json:"results,omitempty"`
-	CreatedAt time.Time            `json:"created_at"`
-	StartedAt *time.Time           `json:"started_at,omitempty"`
-	FinishedAt *time.Time          `json:"finished_at,omitempty"`
+	Scenario   *Scenario            `gorm:"foreignKey:ScenarioID;constraint:OnDelete:SET NULL" json:"scenario,omitempty"`
+	Results    []OptimizationResult `gorm:"foreignKey:OptimizationID" json:"results,omitempty"`
+	CreatedAt  time.Time            `json:"created_at"`
+	StartedAt  *time.Time           `json:"started_at,omitempty"`
+	FinishedAt *time.Time           `json:"finished_at,omitempty"`
 }
 
 // OptimizationResult es autocontenido: guarda el nombre denormalizado para que el
 // plan histórico se lea aunque el producto se archive. LINGO: X, Y, W.
 type OptimizationResult struct {
-	ID                 uint     `gorm:"primaryKey" json:"id"`
-	OptimizationID     uint     `gorm:"not null;index" json:"optimization_id"`
-	ProductID          *uint    `gorm:"index" json:"product_id,omitempty"`           // link blando
-	CanonicalProductID *uint    `gorm:"index" json:"canonical_product_id,omitempty"` // analítica cruzada
-	ProductName        string   `gorm:"not null" json:"product_name"`                // denormalizado
-	QuantityToProduce  float64  `gorm:"not null;default:0" json:"quantity_to_produce"` // X
-	BatchActive        float64  `gorm:"not null;default:0" json:"batch_active"`        // Y
-	VarietyFlag        float64  `gorm:"not null;default:0" json:"variety_flag"`        // W
-	ExpectedProfit     float64  `gorm:"not null;default:0" json:"expected_profit"`
+	ID                 uint    `gorm:"primaryKey" json:"id"`
+	OptimizationID     uint    `gorm:"not null;index" json:"optimization_id"`
+	ProductID          *uint   `gorm:"index" json:"product_id,omitempty"`             // link blando
+	CanonicalProductID *uint   `gorm:"index" json:"canonical_product_id,omitempty"`   // analítica cruzada
+	ProductName        string  `gorm:"not null" json:"product_name"`                  // denormalizado
+	QuantityToProduce  float64 `gorm:"not null;default:0" json:"quantity_to_produce"` // X
+	BatchActive        float64 `gorm:"not null;default:0" json:"batch_active"`        // Y
+	VarietyFlag        float64 `gorm:"not null;default:0" json:"variety_flag"`        // W
+	ExpectedProfit     float64 `gorm:"not null;default:0" json:"expected_profit"`
 
 	Optimization Optimization `gorm:"foreignKey:OptimizationID;constraint:OnDelete:CASCADE" json:"-"`
 	Product      *Product     `gorm:"foreignKey:ProductID;constraint:OnDelete:SET NULL" json:"product,omitempty"`

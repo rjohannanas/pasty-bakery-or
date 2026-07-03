@@ -54,6 +54,12 @@ func Connect(dsn string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("error asegurando CHECK constraints: %w", err)
 	}
 
+	// Invariante M2: una celda de receta y su entidad comparten escenario.
+	// AutoMigrate no arma FKs compuestas, se agregan por SQL.
+	if err := ensureRecipeCompositeFK(db); err != nil {
+		return nil, fmt.Errorf("error asegurando FK compuestas de receta: %w", err)
+	}
+
 	return db, nil
 }
 
@@ -64,13 +70,20 @@ func ensureDomainChecks(db *gorm.DB) error {
 		{"products", "ck_products_nonneg", "sale_price >= 0 AND demand >= 0 AND min_batch >= 0 AND max_batch >= 0"},
 		{"products", "ck_products_batch", "max_batch >= min_batch"}, // invariante M1
 		{"ingredients", "ck_ingredients_nonneg", "unit_cost >= 0 AND stock_available >= 0"},
-		{"machines", "ck_machines_nonneg", "hours_available >= 0"},
+		{"machines", "ck_machines_nonneg", "capacity_minutes >= 0"},
 		{"operational_resources", "ck_opres_nonneg", "available >= 0 AND cost_per_unit >= 0"},
 		{"product_ingredients", "ck_pi_nonneg", "quantity >= 0"},
 		{"product_machines", "ck_pm_nonneg", "minutes_per_unit >= 0"},
 		{"product_operational_resources", "ck_po_nonneg", "consumption_per_batch >= 0"},
 		// Y(I) es @GIN (entero ≥0, nº de lotes), NO binario. Solo W(I) es @BIN.
 		{"optimization_results", "ck_or_domain", "quantity_to_produce >= 0 AND batch_active >= 0 AND variety_flag >= 0"},
+		// Invariante A3: nombres (y unidad) no vacíos, a nivel motor.
+		{"scenarios", "ck_scenarios_name", "length(btrim(name)) > 0"},
+		{"products", "ck_products_name", "length(btrim(name)) > 0"},
+		{"ingredients", "ck_ingredients_name", "length(btrim(name)) > 0"},
+		{"ingredients", "ck_ingredients_unit", "length(btrim(unit)) > 0"},
+		{"machines", "ck_machines_name", "length(btrim(name)) > 0"},
+		{"operational_resources", "ck_opres_name", "length(btrim(name)) > 0"},
 	}
 	for _, c := range checks {
 		stmt := fmt.Sprintf(
@@ -79,6 +92,61 @@ func ensureDomainChecks(db *gorm.DB) error {
 		)
 		if err := db.Exec(stmt).Error; err != nil {
 			return fmt.Errorf("%s: %w", c.name, err)
+		}
+	}
+	return nil
+}
+
+// ensureRecipeCompositeFK deriva el invariante M2 a FKs compuestas: una celda de
+// receta (Q/T/CM) y la entidad que referencia deben pertenecer al MISMO escenario.
+// La FK compuesta apunta a (scenario_id, id) de la entidad, así el motor rechaza
+// pegar un insumo/máquina/opres de otro escenario. Idempotente (DROP IF EXISTS + ADD).
+// ON DELETE CASCADE mantiene L2 (borrar la entidad cascadea su celda de receta).
+func ensureRecipeCompositeFK(db *gorm.DB) error {
+	type fk struct{ table, name, cols, ref, refCols string }
+	fks := []fk{
+		{"product_ingredients", "fk_pi_scen_product", "(scenario_id, product_id)", "products", "(scenario_id, id)"},
+		{"product_ingredients", "fk_pi_scen_ingredient", "(scenario_id, ingredient_id)", "ingredients", "(scenario_id, id)"},
+		{"product_machines", "fk_pm_scen_product", "(scenario_id, product_id)", "products", "(scenario_id, id)"},
+		{"product_machines", "fk_pm_scen_machine", "(scenario_id, machine_id)", "machines", "(scenario_id, id)"},
+		{"product_operational_resources", "fk_po_scen_product", "(scenario_id, product_id)", "products", "(scenario_id, id)"},
+		{"product_operational_resources", "fk_po_scen_opres", "(scenario_id, operational_resource_id)", "operational_resources", "(scenario_id, id)"},
+	}
+
+	// 1. Dropear las FK compuestas PRIMERO: dependen de los UNIQUE de abajo, así que
+	//    hay que sacarlas antes de poder recrear el UNIQUE (idempotencia en restart).
+	for _, f := range fks {
+		if err := db.Exec(fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s", f.table, f.name)).Error; err != nil {
+			return fmt.Errorf("drop %s: %w", f.name, err)
+		}
+	}
+
+	// 2. UNIQUE(scenario_id, id) en las entidades referidas: requisito para que la
+	//    FK compuesta pueda apuntarles. Ya sin dependientes, drop+add es seguro.
+	uniques := []struct{ table, name string }{
+		{"products", "uq_products_scen_id"},
+		{"ingredients", "uq_ingredients_scen_id"},
+		{"machines", "uq_machines_scen_id"},
+		{"operational_resources", "uq_opres_scen_id"},
+	}
+	for _, u := range uniques {
+		stmt := fmt.Sprintf(
+			"ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s, ADD CONSTRAINT %s UNIQUE (scenario_id, id)",
+			u.table, u.name, u.name,
+		)
+		if err := db.Exec(stmt).Error; err != nil {
+			return fmt.Errorf("%s: %w", u.name, err)
+		}
+	}
+
+	// 3. Recrear las FK compuestas (una por matriz de receta hacia sus dos entidades).
+	for _, f := range fks {
+		stmt := fmt.Sprintf(
+			"ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY %s REFERENCES %s %s ON DELETE CASCADE",
+			f.table, f.name, f.cols, f.ref, f.refCols,
+		)
+		if err := db.Exec(stmt).Error; err != nil {
+			return fmt.Errorf("%s: %w", f.name, err)
 		}
 	}
 	return nil
