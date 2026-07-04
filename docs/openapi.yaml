@@ -125,6 +125,8 @@ paths:
               properties:
                 max_production: { type: number, minimum: 0 }
                 min_variety: { type: integer, minimum: 0 }
+                use_integer_vars: { type: boolean, default: true, description: "Activa @GIN en variables X e Y" }
+                use_binary_vars: { type: boolean, default: true, description: "Activa @BIN en variable W y restricción PRO" }
       responses:
         "202":
           description: Job encolado
@@ -601,6 +603,8 @@ components:
         status: { $ref: "#/components/schemas/OptimizationStatus" }
         max_production: { type: number, minimum: 0 }
         min_variety: { type: integer, minimum: 0 }
+        use_integer_vars: { type: boolean, default: true }
+        use_binary_vars: { type: boolean, default: true }
         total_profit: { type: number }
         created_at: { type: string, format: date-time }
         started_at: { type: [string, "null"], format: date-time }

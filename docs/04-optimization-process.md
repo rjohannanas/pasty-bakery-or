@@ -44,7 +44,7 @@ Redis  lingo:jobs (lista)          lingo:status:<jobID>     lingo:retries:<jobID
    ▼
 Worker (loop infinito)
    │  4. BLPOP job → status=processing → broadcast WS
-   │  5. BuildModel(escenario frozen) → arma el .lng
+   │  5. BuildModel(escenario frozen, flags use_integer_vars/use_binary_vars) → arma el .lng
    │  6. RunLINGO(binario externo) → output crudo  (+ guarda LingoLog)
    │  7. ParseOutput → variables X/Y/W por producto
    │  8. Transacción: guarda OptimizationResult por producto

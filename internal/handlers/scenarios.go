@@ -328,12 +328,22 @@ func OptimizeScenario(db *gorm.DB, q *queue.Client) gin.HandlerFunc {
 		}
 
 		var input struct {
-			MaxProduction float64 `json:"max_production"`
-			MinVariety    int     `json:"min_variety"`
+			MaxProduction  float64 `json:"max_production"`
+			MinVariety     int     `json:"min_variety"`
+			UseIntegerVars *bool   `json:"use_integer_vars"`
+			UseBinaryVars  *bool   `json:"use_binary_vars"`
 		}
 		_ = c.ShouldBindJSON(&input)
 		maxP := defaultIfZero(input.MaxProduction, s.MaxProduction)
 		minV := defaultIntIfZero(input.MinVariety, s.MinVariety)
+		useInt := true
+		if input.UseIntegerVars != nil {
+			useInt = *input.UseIntegerVars
+		}
+		useBin := true
+		if input.UseBinaryVars != nil {
+			useBin = *input.UseBinaryVars
+		}
 
 		// Evitar corridas duplicadas simultáneas para el mismo escenario.
 		var active int64
@@ -354,6 +364,7 @@ func OptimizeScenario(db *gorm.DB, q *queue.Client) gin.HandlerFunc {
 		opt := models.Optimization{
 			ScenarioID: &scenID, JobID: jobID, Status: models.StatusPending,
 			MaxProduction: maxP, MinVariety: minV,
+			UseIntegerVars: useInt, UseBinaryVars: useBin,
 		}
 		if err := db.Create(&opt).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

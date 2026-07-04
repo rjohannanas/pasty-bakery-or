@@ -157,6 +157,8 @@ referenciadas). Sin eso la integridad "mismo escenario" quedaría solo en códig
 | status | enum | `pending`\|`processing`\|`done`\|`error`\|`cancelled` | |
 | max_production | float | ≥ 0 | M efectivo de la corrida |
 | min_variety | int | ≥ 0 | PRO efectivo |
+| use_integer_vars | bool | default true | Activa @GIN en X e Y |
+| use_binary_vars | bool | default true | Activa @BIN en W y restricción PRO |
 | total_profit | float | | objetivo |
 | created_at / started_at / finished_at | time | started/finished nullable | |
 

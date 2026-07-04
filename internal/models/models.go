@@ -162,10 +162,12 @@ type Optimization struct {
 	ScenarioID    *uint              `gorm:"index" json:"scenario_id,omitempty"` // SET NULL al archivar
 	JobID         string             `gorm:"not null;uniqueIndex" json:"job_id"`
 	Status        OptimizationStatus `gorm:"type:varchar(20);default:'pending'" json:"status"`
-	MaxProduction float64            `gorm:"not null;default:200" json:"max_production"` // M efectivo
-	MinVariety    int                `gorm:"not null;default:7" json:"min_variety"`      // PRO efectivo
-	TotalProfit   float64            `json:"total_profit"`
-	StatusDetail  string             `gorm:"type:text" json:"status_detail,omitempty"` // motivo legible si error/infeasible
+	MaxProduction  float64            `gorm:"not null;default:200" json:"max_production"` // M efectivo
+	MinVariety     int                `gorm:"not null;default:7" json:"min_variety"`      // PRO efectivo
+	UseIntegerVars bool               `gorm:"not null;default:true" json:"use_integer_vars"`
+	UseBinaryVars  bool               `gorm:"not null;default:true" json:"use_binary_vars"`
+	TotalProfit    float64            `json:"total_profit"`
+	StatusDetail   string             `gorm:"type:text" json:"status_detail,omitempty"` // motivo legible si error/infeasible
 
 	Scenario   *Scenario            `gorm:"foreignKey:ScenarioID;constraint:OnDelete:SET NULL" json:"scenario,omitempty"`
 	Results    []OptimizationResult `gorm:"foreignKey:OptimizationID" json:"results,omitempty"`

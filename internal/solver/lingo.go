@@ -190,6 +190,9 @@ func BuildModel(db *gorm.DB, opt *models.Optimization) (string, []models.Product
 	sb.WriteString(fmt.Sprintf("  CM = %s;\n", floatSliceToString(cmMatrix)))
 	sb.WriteString(fmt.Sprintf("  M = %f;\n", opt.MaxProduction))
 	sb.WriteString(fmt.Sprintf("  PRO = %d;\n", opt.MinVariety))
+	if !opt.UseBinaryVars {
+		sb.WriteString(fmt.Sprintf("  W = %s;\n", onesSliceToString(N)))
+	}
 	sb.WriteString("ENDDATA\n\n")
 
 	sb.WriteString("!FUNCION OBJETIVO;\n")
@@ -207,11 +210,13 @@ func BuildModel(db *gorm.DB, opt *models.Optimization) (string, []models.Product
 	sb.WriteString("!META DE PRODUCCION;\n")
 	sb.WriteString("@SUM(PRODUCTOS(I): X(I)) <= M;\n\n")
 
-	sb.WriteString("!VARIEDAD DE PRODUCCION;\n")
-	sb.WriteString("@SUM(PRODUCTOS(I): W(I)) >= PRO;\n\n")
+	if opt.UseBinaryVars {
+		sb.WriteString("!VARIEDAD DE PRODUCCION;\n")
+		sb.WriteString("@SUM(PRODUCTOS(I): W(I)) >= PRO;\n\n")
+		sb.WriteString("@FOR(PRODUCTOS(I): W(I) <= X(I));\n\n")
+	}
 
 	sb.WriteString("!DEMANDA DE LOS PRODUCTOS;\n")
-	sb.WriteString("@FOR(PRODUCTOS(I): W(I) <= X(I));\n")
 	sb.WriteString("@FOR(PRODUCTOS(I): X(I) <= D(I)*W(I));\n\n")
 
 	sb.WriteString("!LIMITE INFERIOR DE LOTES;\n")
@@ -228,9 +233,16 @@ func BuildModel(db *gorm.DB, opt *models.Optimization) (string, []models.Product
 	sb.WriteString("!CAPACIDAD DE LAS MAQUINAS;\n")
 	sb.WriteString("@FOR(MAQUINAS(K): @SUM(PRODUCTOS(I): T(I,K)*Y(I)) <= CAP(K));\n\n")
 
-	sb.WriteString("!VARIABLES ENTERAS Y BINARIAS;\n")
-	sb.WriteString("@FOR(PRODUCTOS(I): @GIN(X(I)); @GIN(Y(I)));\n")
-	sb.WriteString("@FOR(PRODUCTOS(I): @BIN(W(I)));\n")
+	if opt.UseIntegerVars {
+		sb.WriteString("!VARIABLES ENTERAS;\n")
+		sb.WriteString("@FOR(PRODUCTOS(I): @GIN(X(I)); @GIN(Y(I)));\n\n")
+	}
+
+	if opt.UseBinaryVars {
+		sb.WriteString("!VARIABLES BINARIAS;\n")
+		sb.WriteString("@FOR(PRODUCTOS(I): @BIN(W(I)));\n\n")
+	}
+
 	sb.WriteString("END\n")
 
 	return sb.String(), products, nil
@@ -324,5 +336,19 @@ func ParseOutput(lingoOutput string, products []models.Product) (*LingoResult, e
 		}
 	}
 
+	for _, p := range products {
+		if _, ok := result.W[p.ID]; !ok {
+			result.W[p.ID] = 1.0
+		}
+	}
+
 	return result, nil
+}
+
+func onesSliceToString(n int) string {
+	parts := make([]string, n)
+	for i := 0; i < n; i++ {
+		parts[i] = "1"
+	}
+	return strings.Join(parts, " ")
 }
