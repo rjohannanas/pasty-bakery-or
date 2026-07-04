@@ -2,6 +2,7 @@ package solver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,6 +14,12 @@ import (
 	"gorm.io/gorm"
 	"lingo-backend/internal/logger"
 	"lingo-backend/internal/models"
+)
+
+// Resultados terminales del solver: son deterministas, no tiene sentido reintentarlos.
+var (
+	ErrInfeasible = errors.New("modelo infactible: no hay plan posible con el stock y recursos actuales")
+	ErrUnbounded  = errors.New("modelo no acotado: la ganancia crece sin límite, falta una restricción")
 )
 
 // LingoResult contiene los resultados de las variables X, Y, W y el valor objetivo.
@@ -268,11 +275,14 @@ func RunLINGO(ctx context.Context, jobID, modelContent string) (string, error) {
 
 // ParseOutput extrae los valores de las variables X, Y, W y el valor objetivo.
 func ParseOutput(lingoOutput string, products []models.Product) (*LingoResult, error) {
-	if strings.Contains(strings.ToUpper(lingoOutput), "INFEASIBLE") {
-		return nil, fmt.Errorf("modelo infactible (no hay solución posible con estos recursos)")
+	// LINGO imprime "No feasible solution found." (+ "[Error Code: 81]"); el chequeo viejo
+	// solo buscaba "INFEASIBLE" y no lo detectaba, cayendo al error genérico de parseo.
+	up := strings.ToUpper(lingoOutput)
+	if strings.Contains(up, "NO FEASIBLE SOLUTION") || strings.Contains(up, "INFEASIBLE") || strings.Contains(up, "ERROR CODE:   81") {
+		return nil, ErrInfeasible
 	}
-	if strings.Contains(strings.ToUpper(lingoOutput), "UNBOUNDED") {
-		return nil, fmt.Errorf("modelo no acotado (ganancia infinita, revisa las restricciones)")
+	if strings.Contains(up, "UNBOUNDED") {
+		return nil, ErrUnbounded
 	}
 
 	result := &LingoResult{

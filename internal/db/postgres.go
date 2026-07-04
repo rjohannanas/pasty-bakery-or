@@ -54,6 +54,12 @@ func Connect(dsn string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("error asegurando CHECK constraints: %w", err)
 	}
 
+	// Los índices ÚNICOS globales sobre name son residuo del esquema singleton viejo y
+	// contradicen A4 (unicidad por escenario). AutoMigrate no los borra: los quitamos.
+	if err := dropLegacyGlobalNameIndexes(db); err != nil {
+		return nil, fmt.Errorf("error quitando índices legacy de name: %w", err)
+	}
+
 	// Invariante M2: una celda de receta y su entidad comparten escenario.
 	// AutoMigrate no arma FKs compuestas, se agregan por SQL.
 	if err := ensureRecipeCompositeFK(db); err != nil {
@@ -61,6 +67,23 @@ func Connect(dsn string) (*gorm.DB, error) {
 	}
 
 	return db, nil
+}
+
+// dropLegacyGlobalNameIndexes elimina los índices ÚNICOS globales sobre name que dejó
+// el esquema singleton viejo (idx_products_name, idx_ingredients_name, idx_machines_name).
+// Contradicen A4: la unicidad de nombre es POR ESCENARIO — la enforzan los índices
+// compuestos uq_scen_prod/ing/mach sobre (scenario_id, name), que sí se conservan. Los
+// globales rompen el fork/clone (dos escenarios no podían tener una entidad homónima).
+// AutoMigrate no los borra (los creó el modelo viejo, el actual ya no los declara), así
+// que los quitamos en cada arranque. Idempotente (DROP INDEX IF EXISTS).
+func dropLegacyGlobalNameIndexes(db *gorm.DB) error {
+	legacy := []string{"idx_products_name", "idx_ingredients_name", "idx_machines_name"}
+	for _, idx := range legacy {
+		if err := db.Exec("DROP INDEX IF EXISTS " + idx).Error; err != nil {
+			return fmt.Errorf("%s: %w", idx, err)
+		}
+	}
+	return nil
 }
 
 // ensureDomainChecks agrega los CHECK de dominio. Idempotente (DROP IF EXISTS + ADD).

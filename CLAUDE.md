@@ -42,7 +42,9 @@ No hay corridas duplicadas simultáneas por escenario (el handler lo rechaza con
 
 ## Deploy
 
-- Corre como proceso plano en esta máquina (no hay systemd instalado pese a que `lingo-api.service` existe en el repo — es solo referencia, nunca se instaló). Restart manual: `kill <pid>` + `./lingo-api &` desde este directorio (o recompilar antes: `go build -o lingo-api ./cmd/api`).
+- Corre supervisado por **systemd** (`lingo-api.service`, instalado en `/etc/systemd/system/`, `enabled` → arranca en boot, `Restart=always`/`RestartSec=5`, `WorkingDirectory` = este repo, `User=dulcinea`). Es el único jefe del proceso: **NO** lo arranques a mano con `./lingo-api &` — dos supervisores pelean el puerto :8080 y el que pierde entra en crash-loop llenando el log. Operar siempre por systemd:
+  - Reiniciar (tras recompilar): `go build -o lingo-api ./cmd/api && sudo systemctl restart lingo-api`.
+  - Estado / logs: `systemctl status lingo-api` · `journalctl -u lingo-api -f` (los logs van a **journald**, no a `logs/backend.log` — ese archivo quedó del viejo modelo manual, está congelado).
 - Expuesto a internet vía Cloudflare Tunnel (`cloudflared.service`, sí instalado como servicio de sistema). Config real en `/etc/cloudflared/config.yml` (NO en `~/.cloudflared/config.yml`, que existe pero no lo usa el servicio — cuidado con editar el archivo equivocado). `cloudflared-config.yml` en este repo es solo copia de referencia/documentación.
 - Postgres + Redis vía `docker-compose.yml`, puertos atados a `127.0.0.1` (no exponer a la LAN sin querer). Credenciales via `.env` (`POSTGRES_USER/PASSWORD/DB`), no hardcodeadas en el yml.
 - Password de Postgres sigue siendo la original de dev (`secret` en `.env`, ya no en git) — pendiente rotarla cuando haya tiempo (requiere recrear el volumen o `ALTER USER` desde `psql`, no es solo cambiar el `.env`).

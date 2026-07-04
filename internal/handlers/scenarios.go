@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
 	"lingo-backend/internal/models"
@@ -287,6 +289,13 @@ func CloneScenario(db *gorm.DB) gin.HandlerFunc {
 			return nil
 		})
 		if err != nil {
+			// Nombre de escenario duplicado (A4 a nivel escenario): conflicto del cliente,
+			// no error de servidor. SQLSTATE 23505 = unique_violation → 409, no 500.
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+				c.JSON(http.StatusConflict, gin.H{"error": "Ya existe un escenario con ese nombre"})
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al clonar: " + err.Error()})
 			return
 		}

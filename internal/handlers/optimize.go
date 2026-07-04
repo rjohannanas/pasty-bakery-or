@@ -53,6 +53,14 @@ func GetOptimizationResult(db *gorm.DB) gin.HandlerFunc {
 		if err := db.
 			Preload("Results").
 			Preload("Scenario").
+			// Config del escenario para los gráficos "uso vs capacidad" (necesita las
+			// matrices de receta Q/T/CM y los disponibles IN/CAP/DISP junto con X/Y).
+			Preload("Scenario.Machines").
+			Preload("Scenario.Ingredients").
+			Preload("Scenario.OperationalResources").
+			Preload("Scenario.Products.Machines.Machine").
+			Preload("Scenario.Products.Ingredients.Ingredient").
+			Preload("Scenario.Products.OperationalResources.OperationalResource").
 			First(&opt, c.Param("id")).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Optimización no encontrada"})
 			return

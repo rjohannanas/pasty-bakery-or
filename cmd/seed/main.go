@@ -38,7 +38,7 @@ func main() {
 	flag.Parse()
 
 	_ = godotenv.Load()
-	if err := logger.Init("logs/backend.log"); err != nil {
+	if err := logger.Init(""); err != nil {
 		panic(err)
 	}
 	dsn := os.Getenv("DATABASE_URL")

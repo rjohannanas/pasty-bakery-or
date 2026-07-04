@@ -34,8 +34,7 @@ func main() {
 	}
 
 	// 2. Inicializar Logger
-	logFile := os.Getenv("LOG_FILE")
-	if logFile == "" { logFile = "logs/backend.log" }
+	logFile := os.Getenv("LOG_FILE") // vacío = solo stdout → journald (fuente única bajo systemd)
 	if err := logger.Init(logFile); err != nil {
 		panic("Error inicializando logger: " + err.Error())
 	}

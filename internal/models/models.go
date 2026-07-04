@@ -151,7 +151,8 @@ const (
 	StatusPending    OptimizationStatus = "pending"
 	StatusProcessing OptimizationStatus = "processing"
 	StatusDone       OptimizationStatus = "done"
-	StatusError      OptimizationStatus = "error"
+	StatusError      OptimizationStatus = "error"      // fallo de ejecución (crash, timeout, parseo)
+	StatusInfeasible OptimizationStatus = "infeasible" // el solver corrió, no hay plan posible
 	StatusCancelled  OptimizationStatus = "cancelled"
 )
 
@@ -164,6 +165,7 @@ type Optimization struct {
 	MaxProduction float64            `gorm:"not null;default:200" json:"max_production"` // M efectivo
 	MinVariety    int                `gorm:"not null;default:7" json:"min_variety"`      // PRO efectivo
 	TotalProfit   float64            `json:"total_profit"`
+	StatusDetail  string             `gorm:"type:text" json:"status_detail,omitempty"` // motivo legible si error/infeasible
 
 	Scenario   *Scenario            `gorm:"foreignKey:ScenarioID;constraint:OnDelete:SET NULL" json:"scenario,omitempty"`
 	Results    []OptimizationResult `gorm:"foreignKey:OptimizationID" json:"results,omitempty"`

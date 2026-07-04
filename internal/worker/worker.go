@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -112,6 +113,11 @@ func processJob(ctx context.Context, db *gorm.DB, q *queue.Client, hub *ws.Hub, 
 	// 4. Parsear resultados
 	lingoResult, err := solver.ParseOutput(output, products)
 	if err != nil {
+		// Infactible / no acotado son resultados deterministas del solver: no reintentar.
+		if errors.Is(err, solver.ErrInfeasible) || errors.Is(err, solver.ErrUnbounded) {
+			finalizeTerminal(ctx, db, q, hub, jobID, err)
+			return
+		}
 		handleJobError(ctx, db, q, hub, jobID, fmt.Sprintf("Error parseando output: %v", err))
 		return
 	}
@@ -178,17 +184,36 @@ func processJob(ctx context.Context, db *gorm.DB, q *queue.Client, hub *ws.Hub, 
 	logger.L.Info().Str("job_id", jobID).Msg("[WORKER] Job finalizado con éxito.")
 }
 
+// finalizeTerminal cierra un job con un resultado determinista del solver (infactible /
+// no acotado). NO reintenta —la respuesta sería idéntica— y guarda el motivo legible
+// en status_detail para que el front lo muestre en vez de un error opaco.
+func finalizeTerminal(ctx context.Context, db *gorm.DB, q *queue.Client, hub *ws.Hub, jobID string, cause error) {
+	st := models.StatusError
+	if errors.Is(cause, solver.ErrInfeasible) {
+		st = models.StatusInfeasible
+	}
+	logger.L.Warn().Str("job_id", jobID).Msgf("[WORKER] Resultado terminal del solver (sin reintento): %s", cause.Error())
+	now := time.Now()
+	q.SetStatus(ctx, jobID, string(st))
+	broadcastStatus(hub, jobID, string(st))
+	db.Model(&models.Optimization{}).Where("job_id = ?", jobID).Updates(map[string]interface{}{
+		"status":        st,
+		"status_detail": cause.Error(),
+		"finished_at":   now,
+	})
+}
+
 func handleJobError(ctx context.Context, db *gorm.DB, q *queue.Client, hub *ws.Hub, jobID, reason string) {
 	logger.L.Error().Str("job_id", jobID).Msgf("[WORKER] Error de job: %s", reason)
-	
+
 	retries, _ := q.IncrementRetry(ctx, jobID)
-	
+
 	if retries <= maxRetries {
 		logger.L.Info().Str("job_id", jobID).Int("retry", retries).Msg("[WORKER] Re-encolando job para reintento.")
 		q.SetStatus(ctx, jobID, string(models.StatusPending))
 		broadcastStatus(hub, jobID, string(models.StatusPending))
 		q.PushJob(ctx, jobID) // Lo volvemos a meter al final de la cola
-		
+
 		// En Postgres vuelve a pending
 		db.Model(&models.Optimization{}).Where("job_id = ?", jobID).Update("status", models.StatusPending)
 	} else {
@@ -196,10 +221,11 @@ func handleJobError(ctx context.Context, db *gorm.DB, q *queue.Client, hub *ws.H
 		now := time.Now()
 		q.SetStatus(ctx, jobID, string(models.StatusError))
 		broadcastStatus(hub, jobID, string(models.StatusError))
-		
+
 		db.Model(&models.Optimization{}).Where("job_id = ?", jobID).Updates(map[string]interface{}{
-			"status":      models.StatusError,
-			"finished_at": now,
+			"status":        models.StatusError,
+			"status_detail": reason,
+			"finished_at":   now,
 		})
 	}
 }
